@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 pub mod discid;
+pub mod drive;
 pub mod toc;
 
 /// Version of the ripping core, reported to the UI.
