@@ -28,10 +28,28 @@
   },
   "track": {
     "number": "Track",
+    "title": "Title",
     "start": "Start",
     "length": "Length",
     "data": "Data",
     "preEmphasis": "Pre-emphasis"
+  },
+  "metadata": {
+    "identify": "Identify disc",
+    "identifying": "Identifying",
+    "none": "No source recognised this disc",
+    "choose": "Several pressings share this disc ID. Pick the one you are holding.",
+    "use": "Use this",
+    "inUse": "In use",
+    "from": "From {source}",
+    "trackMatch": "Track count matches",
+    "discOf": "Disc {number} of {total}",
+    "disc": "Disc {number}",
+    "trackCount": "{count} track | {count} tracks",
+    "unknownField": "unknown"
+  },
+  "source": {
+    "musicBrainz": "MusicBrainz"
   },
   "error": {
     "drive": {
@@ -48,6 +66,11 @@
       "outOfOrder": "Track {number} starts at sector {start}, which is not after the previous track at sector {previous}.",
       "leadOutTooEarly": "The lead-out at sector {leadOut} falls inside the last track, which starts at sector {lastTrackStart}."
     },
-    "unknown": "Something went wrong."
+    "unknown": "Something went wrong.",
+    "metadata": {
+      "unreachable": "{source} could not be reached.",
+      "rejected": "{source} refused the request with status {status}.",
+      "unreadable": "{source} sent an answer this version cannot read."
+    }
   }
 }

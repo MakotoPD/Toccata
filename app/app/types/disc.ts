@@ -29,6 +29,40 @@ export interface Disc {
   freedbId: string
 }
 
+export type SourceId = 'musicBrainz'
+
+export interface TrackMetadata {
+  number: number
+  title: string
+  artist: string
+  lengthMs: number | null
+}
+
+export interface ReleaseCandidate {
+  sourceId: SourceId
+  id: string
+  title: string
+  artist: string
+  date: string | null
+  country: string | null
+  label: string | null
+  barcode: string | null
+  disambiguation: string | null
+  discNumber: number
+  discTotal: number | null
+  tracks: TrackMetadata[]
+}
+
+export type MetadataFault =
+  | { code: 'unreachable'; sourceId: SourceId }
+  | { code: 'rejected'; sourceId: SourceId; status: number }
+  | { code: 'unreadable'; sourceId: SourceId }
+
+export interface LookupReport {
+  candidates: ReleaseCandidate[]
+  failures: MetadataFault[]
+}
+
 export type TocFault =
   | { code: 'empty' }
   | { code: 'outOfOrder'; number: number; start: number; previous: number }

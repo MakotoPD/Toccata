@@ -2,6 +2,7 @@
 
 pub mod discid;
 pub mod drive;
+pub mod metadata;
 pub mod toc;
 
 /// Version of the ripping core, reported to the UI.

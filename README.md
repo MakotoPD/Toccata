@@ -12,8 +12,9 @@ M4A (both AAC and ALAC variants).
 
 ## Status
 
-Early development: the application shell builds and runs on all three
-platforms, but no disc is read yet.
+Early development. The application reads the table of contents of an audio CD
+on all three platforms, computes the MusicBrainz and FreeDB disc identifiers,
+and looks the disc up in MusicBrainz. Nothing is ripped yet.
 
 ```bash
 pnpm install && pnpm tauri dev
@@ -34,6 +35,12 @@ whole is GPL. This rules out a permissive license.
 | --- | --- |
 | tauri, tauri-build | Apache-2.0 OR MIT |
 | serde, serde_json | MIT OR Apache-2.0 |
+| reqwest | MIT OR Apache-2.0 |
+| sha1 | MIT OR Apache-2.0 |
+| thiserror | MIT OR Apache-2.0 |
+| windows (Windows only) | Apache-2.0 OR MIT |
+| libc (Linux and macOS only) | MIT OR Apache-2.0 |
+| tokio (development only) | MIT |
 | nuxt, vue | MIT |
 | tailwindcss, @tailwindcss/vite | MIT |
 | @nuxtjs/i18n, vue-i18n | MIT |
@@ -42,5 +49,9 @@ whole is GPL. This rules out a permissive license.
 | vue-tsc | MIT |
 | typescript | Apache-2.0 |
 
-Native libraries linked later in development (`libcdio`,
-`libcdio-paranoia`, FFmpeg) are listed here once they are wired in.
+HTTPS goes through the platform TLS stack, so Linux builds link the system
+OpenSSL. Windows and macOS use schannel and Security.framework and need
+nothing extra.
+
+Native libraries linked later in development (`libcdio-paranoia`, FFmpeg) are
+listed here once they are wired in.

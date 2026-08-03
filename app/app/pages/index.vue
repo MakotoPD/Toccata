@@ -4,12 +4,27 @@ import { invoke, isTauri } from '@tauri-apps/api/core'
 const { t, locale, locales, setLocale } = useI18n()
 const { fromFrames } = useCdTime()
 const { drives, selectedId, disc, faultMessage, busy, refresh, read, eject, select } = useDisc()
+const metadata = useMetadata()
 
 const coreVersion = ref<string | null>(null)
 
 const totalFrames = computed(() =>
   disc.value ? disc.value.toc.leadOut - (disc.value.toc.tracks[0]?.start ?? 0) : 0,
 )
+
+async function readAndIdentify() {
+  metadata.reset()
+  await read()
+
+  if (disc.value) {
+    await metadata.lookup()
+  }
+}
+
+async function ejectDisc() {
+  metadata.reset()
+  await eject()
+}
 
 onMounted(async () => {
   if (!isTauri()) {
@@ -57,17 +72,23 @@ onMounted(async () => {
         <button
           type="button"
           class="rounded-xs border border-brass-500 bg-brass-500/10 px-3 py-1.5 text-[0.6875rem] uppercase tracking-[0.16em] text-brass-400 transition-colors hover:bg-brass-500/20 focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-brass-500 disabled:opacity-40"
-          :disabled="busy || !selectedId"
-          @click="read"
+          :disabled="busy || metadata.searching.value || !selectedId"
+          @click="readAndIdentify"
         >
-          {{ busy ? t('drive.reading') : t('drive.read') }}
+          {{
+            busy
+              ? t('drive.reading')
+              : metadata.searching.value
+                ? t('metadata.identifying')
+                : t('drive.read')
+          }}
         </button>
 
         <button
           type="button"
           class="rounded-xs border border-chassis-700 px-3 py-1.5 text-[0.6875rem] uppercase tracking-[0.16em] text-etch-400 transition-colors hover:border-etch-600 hover:text-etch-100 focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-brass-500 disabled:opacity-40"
           :disabled="busy || !selectedId"
-          @click="eject"
+          @click="ejectDisc"
         >
           {{ t('drive.eject') }}
         </button>
@@ -91,6 +112,14 @@ onMounted(async () => {
       </p>
 
       <template v-else>
+        <header v-if="metadata.release.value" class="mb-6">
+          <h2 class="font-display text-2xl text-etch-100">{{ metadata.release.value.title }}</h2>
+          <p class="mt-1 text-sm text-etch-400">{{ metadata.release.value.artist }}</p>
+          <p class="mt-2 text-[0.625rem] uppercase tracking-[0.18em] text-etch-600">
+            {{ t('metadata.from', { source: t('source.' + metadata.release.value.sourceId) }) }}
+          </p>
+        </header>
+
         <dl class="mb-8 grid gap-x-10 gap-y-4 sm:grid-cols-2 lg:grid-cols-4">
           <div>
             <dt class="text-[0.625rem] uppercase tracking-[0.18em] text-etch-600">
@@ -124,7 +153,37 @@ onMounted(async () => {
           </div>
         </dl>
 
-        <TrackList :tracks="disc.toc.tracks" />
+        <ReleasePicker
+          v-if="metadata.candidates.value.length > 1"
+          class="mb-8"
+          :candidates="metadata.candidates.value"
+          :selected-id="metadata.selectedId.value"
+          :disc-track-count="disc.toc.tracks.length"
+          @select="metadata.select"
+        />
+
+        <p
+          v-else-if="metadata.searched.value && metadata.candidates.value.length === 0"
+          class="mb-8 text-xs uppercase tracking-[0.2em] text-etch-600"
+        >
+          {{ t('metadata.none') }}
+        </p>
+
+        <ul v-if="metadata.failureMessages.value.length" class="mb-8 flex flex-col gap-2">
+          <li
+            v-for="message in metadata.failureMessages.value"
+            :key="message"
+            class="rounded-xs border border-chassis-700 border-l-2 border-l-etch-600 bg-chassis-900 px-4 py-2 text-xs text-etch-400"
+          >
+            {{ message }}
+          </li>
+        </ul>
+
+        <TrackList
+          :tracks="disc.toc.tracks"
+          :metadata="metadata.release.value?.tracks"
+          :release-artist="metadata.release.value?.artist"
+        />
       </template>
     </main>
 

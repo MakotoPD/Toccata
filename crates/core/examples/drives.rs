@@ -1,15 +1,19 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-//! Lists the optical drives the system reports and dumps the table of contents
-//! of whatever is loaded. Handy for checking a real drive without the GUI:
+//! Lists the optical drives the system reports, dumps the table of contents of
+//! whatever is loaded and asks the metadata cascade what the disc is. Handy for
+//! checking a real drive without the GUI:
 //!
 //! ```text
 //! cargo run -p toccata-core --example drives
 //! ```
 
 use toccata_core::drive;
+use toccata_core::metadata::Cascade;
+use toccata_core::toc::Toc;
 
-fn main() {
+#[tokio::main]
+async fn main() {
     let drives = drive::list();
     if drives.is_empty() {
         println!("no optical drives found");
@@ -29,25 +33,55 @@ fn main() {
 
         match handle.read_toc() {
             Ok(toc) => {
-                println!("  disc id  {}", toc.musicbrainz_disc_id());
-                println!("  freedb   {}", toc.freedb_id());
-                println!("  duration {:?}", toc.duration());
-                for track in &toc.tracks {
-                    println!(
-                        "  {:>2}  start {:>7}  {:>6} frames  {}{}",
-                        track.number,
-                        track.start,
-                        track.length,
-                        if track.audio { "audio" } else { "data" },
-                        if track.pre_emphasis {
-                            " pre-emphasis"
-                        } else {
-                            ""
-                        },
-                    );
-                }
+                print_toc(&toc);
+                identify(&toc).await;
             }
             Err(error) => println!("  cannot read toc: {error}"),
         }
+    }
+}
+
+fn print_toc(toc: &Toc) {
+    println!("  disc id  {}", toc.musicbrainz_disc_id());
+    println!("  freedb   {}", toc.freedb_id());
+    println!("  duration {:?}", toc.duration());
+
+    for track in &toc.tracks {
+        println!(
+            "  {:>2}  start {:>7}  {:>6} frames  {}{}",
+            track.number,
+            track.start,
+            track.length,
+            if track.audio { "audio" } else { "data" },
+            if track.pre_emphasis {
+                " pre-emphasis"
+            } else {
+                ""
+            },
+        );
+    }
+}
+
+async fn identify(toc: &Toc) {
+    let report = Cascade::default().lookup(toc).await;
+
+    for failure in &report.failures {
+        println!("  source failed: {failure}");
+    }
+
+    if report.candidates.is_empty() {
+        println!("  no source recognised this disc");
+        return;
+    }
+
+    for candidate in &report.candidates {
+        println!(
+            "  [{:?}] {} - {} ({}, {} tracks)",
+            candidate.source_id,
+            candidate.artist,
+            candidate.title,
+            candidate.date.as_deref().unwrap_or("no date"),
+            candidate.tracks.len(),
+        );
     }
 }

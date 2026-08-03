@@ -6,7 +6,13 @@ rust-version.workspace = true
 license.workspace = true
 
 [dependencies]
+# Platform TLS on purpose, and note that reqwest's `default-tls` no longer
+# means that: since 0.13 it resolves to rustls with aws-lc-sys, which needs a C
+# toolchain plus CMake and NASM to build. Schannel, Security.framework and the
+# OpenSSL that Tauri already requires on Linux cost nothing extra.
+reqwest = { version = "0.13.4", default-features = false, features = ["native-tls", "json", "charset", "http2", "gzip", "system-proxy", "query"] }
 serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
 sha1 = "0.11.0"
 thiserror = "2.0.19"
 
@@ -15,3 +21,6 @@ windows = { version = "0.62.2", features = ["Win32_Devices_Cdrom", "Win32_Founda
 
 [target."cfg(unix)".dependencies]
 libc = "0.2.189"
+
+[dev-dependencies]
+tokio = { version = "1.53.1", features = ["rt-multi-thread", "macros"] }

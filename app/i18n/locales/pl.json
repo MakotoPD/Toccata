@@ -28,10 +28,28 @@
   },
   "track": {
     "number": "Ścieżka",
+    "title": "Tytuł",
     "start": "Początek",
     "length": "Długość",
     "data": "Dane",
     "preEmphasis": "Pre-emfaza"
+  },
+  "metadata": {
+    "identify": "Rozpoznaj płytę",
+    "identifying": "Rozpoznawanie",
+    "none": "Żadne źródło nie rozpoznało tej płyty",
+    "choose": "Kilka wydań ma ten sam Disc ID. Wybierz to, które trzymasz w ręku.",
+    "use": "Użyj tego",
+    "inUse": "W użyciu",
+    "from": "Z {source}",
+    "trackMatch": "Liczba ścieżek się zgadza",
+    "discOf": "Płyta {number} z {total}",
+    "disc": "Płyta {number}",
+    "trackCount": "{count} ścieżka | {count} ścieżki | {count} ścieżek",
+    "unknownField": "nieznane"
+  },
+  "source": {
+    "musicBrainz": "MusicBrainz"
   },
   "error": {
     "drive": {
@@ -48,6 +66,11 @@
       "outOfOrder": "Ścieżka {number} zaczyna się na sektorze {start}, czyli nie po poprzedniej ścieżce z sektora {previous}.",
       "leadOutTooEarly": "Lead-out na sektorze {leadOut} wypada wewnątrz ostatniej ścieżki, która zaczyna się na sektorze {lastTrackStart}."
     },
-    "unknown": "Coś poszło nie tak."
+    "unknown": "Coś poszło nie tak.",
+    "metadata": {
+      "unreachable": "Nie udało się połączyć z {source}.",
+      "rejected": "{source} odrzucił zapytanie ze statusem {status}.",
+      "unreadable": "{source} zwrócił odpowiedź, której ta wersja nie potrafi odczytać."
+    }
   }
 }
