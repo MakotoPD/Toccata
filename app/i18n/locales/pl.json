@@ -47,11 +47,13 @@
     "disc": "Płyta {number}",
     "trackCount": "{count} ścieżka | {count} ścieżki | {count} ścieżek",
     "unknownField": "nieznane",
-    "relayedFrom": "przez {source}"
+    "relayedFrom": "przez {source}",
+    "coverOf": "Okładka albumu {title}"
   },
   "source": {
     "musicBrainz": "MusicBrainz",
-    "ctdb": "CTDB"
+    "ctdb": "CTDB",
+    "coverArtArchive": "Cover Art Archive"
   },
   "error": {
     "drive": {

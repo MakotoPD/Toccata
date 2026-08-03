@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+mod base64;
+
 pub mod discid;
 pub mod drive;
 pub mod metadata;

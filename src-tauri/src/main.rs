@@ -8,7 +8,8 @@ use std::sync::Mutex;
 use serde::Serialize;
 use tauri::{Manager, State};
 use toccata_core::drive::{self, DriveError, DriveInfo};
-use toccata_core::metadata::{Cascade, LookupReport};
+use toccata_core::metadata::cover::Covers;
+use toccata_core::metadata::{Cascade, LookupReport, MetadataError};
 use toccata_core::toc::Toc;
 
 /// The disc currently on screen, plus the metadata sources. Keeping the TOC
@@ -17,6 +18,7 @@ use toccata_core::toc::Toc;
 struct AppState {
     disc: Mutex<Option<Toc>>,
     metadata: Cascade,
+    covers: Covers,
 }
 
 /// What the UI needs to describe the disc currently in a drive. The
@@ -76,6 +78,16 @@ async fn lookup_metadata(state: State<'_, AppState>) -> Result<LookupReport, Dri
     Ok(state.metadata.lookup(&toc).await)
 }
 
+/// The address comes from whichever database answered, so the fetch itself
+/// decides whether that host may be contacted at all.
+#[tauri::command]
+async fn fetch_cover(
+    url: String,
+    state: State<'_, AppState>,
+) -> Result<Option<String>, MetadataError> {
+    state.covers.fetch(&url).await
+}
+
 #[tauri::command]
 fn eject(drive_id: String, state: State<'_, AppState>) -> Result<(), DriveError> {
     drive::open(&drive_id)?.eject()?;
@@ -92,6 +104,7 @@ fn main() {
             app.manage(AppState {
                 disc: Mutex::new(None),
                 metadata: Cascade::default(),
+                covers: Covers::default(),
             });
             Ok(())
         })
@@ -100,6 +113,7 @@ fn main() {
             list_drives,
             read_disc,
             lookup_metadata,
+            fetch_cover,
             eject
         ])
         .run(tauri::generate_context!())

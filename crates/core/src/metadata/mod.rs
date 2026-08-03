@@ -14,6 +14,7 @@ use serde::Serialize;
 
 use crate::toc::Toc;
 
+pub mod cover;
 pub mod ctdb;
 pub mod musicbrainz;
 
@@ -24,6 +25,7 @@ pub mod musicbrainz;
 pub enum SourceId {
     MusicBrainz,
     Ctdb,
+    CoverArtArchive,
 }
 
 #[derive(Debug, thiserror::Error, Serialize)]

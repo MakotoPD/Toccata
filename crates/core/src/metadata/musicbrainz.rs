@@ -11,7 +11,9 @@ use std::time::Duration;
 
 use serde::Deserialize;
 
-use super::{Lookup, MetadataError, MetadataSource, ReleaseCandidate, SourceId, TrackMetadata};
+use super::{
+    Lookup, MetadataError, MetadataSource, ReleaseCandidate, SourceId, TrackMetadata, cover,
+};
 use crate::toc::Toc;
 
 const BASE_URL: &str = "https://musicbrainz.org/ws/2";
@@ -103,6 +105,8 @@ impl MetadataSource for MusicBrainz {
 }
 
 fn into_candidate(release: Release) -> ReleaseCandidate {
+    let cover_art_id = release.id.clone();
+
     // Looking up by Disc ID narrows `media` to the medium this disc actually
     // is, so its position is the disc number.
     let medium = release.media.first();
@@ -123,7 +127,12 @@ fn into_candidate(release: Release) -> ReleaseCandidate {
         disambiguation: release.disambiguation.filter(|value| !value.is_empty()),
         disc_number: medium.map_or(1, |medium| medium.position),
         disc_total: None,
-        cover_art: None,
+        // The release says whether the archive holds a front cover, which
+        // saves asking for one that is not there.
+        cover_art: release
+            .cover_art_archive
+            .filter(|archive| archive.front)
+            .map(|_| cover::archive_url(&cover_art_id)),
         tracks: medium
             .map(|medium| {
                 medium
@@ -176,6 +185,14 @@ struct Release {
     label_info: Vec<LabelInfo>,
     #[serde(default)]
     media: Vec<Medium>,
+    #[serde(rename = "cover-art-archive")]
+    cover_art_archive: Option<CoverArtArchive>,
+}
+
+#[derive(Deserialize, Clone, Copy)]
+struct CoverArtArchive {
+    #[serde(default)]
+    front: bool,
 }
 
 #[derive(Deserialize)]

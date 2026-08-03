@@ -47,27 +47,11 @@ fn digit_sum(mut value: u32) -> u32 {
     sum
 }
 
+/// The digest goes out in base64 with `+/=` swapped for `._-`.
 fn encode_base64(digest: &[u8; 20]) -> String {
     const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._";
 
-    let mut out = String::with_capacity(28);
-    for chunk in digest.chunks(3) {
-        let packed = chunk
-            .iter()
-            .chain(std::iter::repeat(&0))
-            .take(3)
-            .fold(0u32, |acc, byte| (acc << 8) | u32::from(*byte));
-
-        for position in 0..4 {
-            if position <= chunk.len() {
-                let index = (packed >> (18 - position * 6)) & 0x3f;
-                out.push(ALPHABET[index as usize] as char);
-            } else {
-                out.push('-');
-            }
-        }
-    }
-    out
+    crate::base64::encode(digest, ALPHABET, '-')
 }
 
 #[cfg(test)]

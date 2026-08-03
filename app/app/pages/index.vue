@@ -112,15 +112,24 @@ onMounted(async () => {
       </p>
 
       <template v-else>
-        <header v-if="metadata.release.value" class="mb-6">
-          <h2 class="font-display text-2xl text-etch-100">{{ metadata.release.value.title }}</h2>
-          <p class="mt-1 text-sm text-etch-400">{{ metadata.release.value.artist }}</p>
-          <p class="mt-2 text-[0.625rem] uppercase tracking-[0.18em] text-etch-600">
-            {{ t('metadata.from', { source: t('source.' + metadata.release.value.sourceId) }) }}
-            <span v-if="metadata.release.value.relayedFrom">
-              {{ t('metadata.relayedFrom', { source: metadata.release.value.relayedFrom }) }}
-            </span>
-          </p>
+        <header v-if="metadata.release.value" class="mb-6 flex items-start gap-5">
+          <img
+            v-if="metadata.cover.value"
+            :src="metadata.cover.value"
+            :alt="t('metadata.coverOf', { title: metadata.release.value.title })"
+            class="size-24 shrink-0 rounded-xs border border-chassis-700 object-cover"
+          />
+
+          <div>
+            <h2 class="font-display text-2xl text-etch-100">{{ metadata.release.value.title }}</h2>
+            <p class="mt-1 text-sm text-etch-400">{{ metadata.release.value.artist }}</p>
+            <p class="mt-2 text-[0.625rem] uppercase tracking-[0.18em] text-etch-600">
+              {{ t('metadata.from', { source: t('source.' + metadata.release.value.sourceId) }) }}
+              <span v-if="metadata.release.value.relayedFrom">
+                {{ t('metadata.relayedFrom', { source: metadata.release.value.relayedFrom }) }}
+              </span>
+            </p>
+          </div>
         </header>
 
         <dl class="mb-8 grid gap-x-10 gap-y-4 sm:grid-cols-2 lg:grid-cols-4">

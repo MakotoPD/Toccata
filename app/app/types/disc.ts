@@ -29,7 +29,7 @@ export interface Disc {
   freedbId: string
 }
 
-export type SourceId = 'musicBrainz' | 'ctdb'
+export type SourceId = 'musicBrainz' | 'ctdb' | 'coverArtArchive'
 
 export interface TrackMetadata {
   number: number

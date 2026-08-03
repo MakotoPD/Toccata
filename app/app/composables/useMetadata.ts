@@ -15,6 +15,8 @@ export function useMetadata() {
   const selectedId = useState<string | null>('metadata-selected', () => null)
   const searching = useState('metadata-searching', () => false)
   const searched = useState('metadata-searched', () => false)
+  /** Data URI for the chosen release, fetched by the backend. */
+  const cover = useState<string | null>('metadata-cover', () => null)
 
   const release = computed(
     () => candidates.value.find((candidate) => candidate.id === selectedId.value) ?? null,
@@ -36,6 +38,7 @@ export function useMetadata() {
     failures.value = []
     selectedId.value = null
     searched.value = false
+    cover.value = null
   }
 
   async function lookup() {
@@ -47,6 +50,7 @@ export function useMetadata() {
     candidates.value = []
     failures.value = []
     selectedId.value = null
+    cover.value = null
 
     try {
       const report = await invoke<LookupReport>('lookup_metadata')
@@ -56,7 +60,7 @@ export function useMetadata() {
       // With a single candidate there is nothing to choose between; with more
       // than one the decision is the user's and stays unmade.
       if (report.candidates.length === 1) {
-        selectedId.value = report.candidates[0]!.id
+        await select(report.candidates[0]!.id)
       }
     } finally {
       searching.value = false
@@ -64,8 +68,21 @@ export function useMetadata() {
     }
   }
 
-  function select(id: string) {
+  async function select(id: string) {
     selectedId.value = id
+    cover.value = null
+
+    const url = release.value?.coverArt
+    if (!url || !isTauri()) {
+      return
+    }
+
+    try {
+      cover.value = await invoke<string | null>('fetch_cover', { url })
+    } catch (error) {
+      // A missing or unreachable cover is not worth interrupting anything for.
+      failures.value = [...failures.value, error as MetadataFault]
+    }
   }
 
   return {
@@ -74,6 +91,7 @@ export function useMetadata() {
     failureMessages,
     selectedId,
     release,
+    cover,
     searching,
     searched,
     lookup,

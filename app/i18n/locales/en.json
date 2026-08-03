@@ -47,11 +47,13 @@
     "disc": "Disc {number}",
     "trackCount": "{count} track | {count} tracks",
     "unknownField": "unknown",
-    "relayedFrom": "via {source}"
+    "relayedFrom": "via {source}",
+    "coverOf": "Cover of {title}"
   },
   "source": {
     "musicBrainz": "MusicBrainz",
-    "ctdb": "CTDB"
+    "ctdb": "CTDB",
+    "coverArtArchive": "Cover Art Archive"
   },
   "error": {
     "drive": {
