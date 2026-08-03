@@ -12,7 +12,14 @@ M4A (both AAC and ALAC variants).
 
 ## Status
 
-Early development. See `docs/BUILD.md` for build instructions.
+Early development: the application shell builds and runs on all three
+platforms, but no disc is read yet.
+
+```bash
+pnpm install && pnpm tauri dev
+```
+
+Prerequisites and release builds are described in [docs/BUILD.md](docs/BUILD.md).
 
 ## License
 
