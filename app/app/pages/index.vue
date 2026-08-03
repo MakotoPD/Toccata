@@ -1,5 +1,15 @@
 <script setup lang="ts">
+import { invoke, isTauri } from '@tauri-apps/api/core'
+
 const { t, locale, locales, setLocale } = useI18n()
+
+// Runs in a plain browser during `nuxt dev`, where there is no backend to ask.
+const coreVersion = ref<string | null>(null)
+onMounted(async () => {
+  if (isTauri()) {
+    coreVersion.value = await invoke<string>('core_version')
+  }
+})
 </script>
 
 <template>
@@ -25,6 +35,10 @@ const { t, locale, locales, setLocale } = useI18n()
           {{ option.code }}
         </button>
       </nav>
+
+      <p v-if="coreVersion" class="font-mono text-[0.6875rem] tracking-wider text-etch-600">
+        {{ t('about.core', { version: coreVersion }) }}
+      </p>
     </div>
   </main>
 </template>

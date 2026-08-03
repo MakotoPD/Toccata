@@ -1,0 +1,18 @@
+{
+  "name": "toccata",
+  "version": "0.1.0",
+  "private": true,
+  "license": "GPL-3.0-or-later",
+  "type": "module",
+  "scripts": {
+    "dev": "pnpm --filter toccata-app dev",
+    "generate": "pnpm --filter toccata-app generate",
+    "lint": "pnpm --filter toccata-app lint",
+    "format": "pnpm --filter toccata-app format",
+    "typecheck": "pnpm --filter toccata-app typecheck",
+    "tauri": "tauri"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.11.4"
+  }
+}
