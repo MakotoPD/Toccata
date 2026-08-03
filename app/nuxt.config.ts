@@ -1,5 +1,8 @@
+import tailwindcss from '@tailwindcss/vite'
+
 export default defineNuxtConfig({
   modules: ['@nuxt/eslint'],
+  css: ['./app/assets/css/main.css'],
   // Desktop shell: no server rendering, the whole app is a static bundle
   // loaded by the Tauri webview.
   ssr: false,
@@ -11,6 +14,7 @@ export default defineNuxtConfig({
   },
   vite: {
     clearScreen: false,
+    plugins: [tailwindcss()],
     server: { strictPort: true },
   },
 })

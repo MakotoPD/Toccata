@@ -16,7 +16,9 @@
     "typecheck": "nuxt typecheck"
   },
   "dependencies": {
-    "nuxt": "^4.5.1"
+    "@tailwindcss/vite": "^4.3.3",
+    "nuxt": "^4.5.1",
+    "tailwindcss": "^4.3.3"
   },
   "devDependencies": {
     "@nuxt/eslint": "^1.16.0",
