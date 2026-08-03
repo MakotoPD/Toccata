@@ -3,14 +3,57 @@
 // Without this the release build spawns a console window alongside the app.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+use serde::Serialize;
+use toccata_core::drive::{self, DriveError, DriveInfo};
+use toccata_core::toc::Toc;
+
+/// What the UI needs to describe the disc currently in a drive. The
+/// identifiers travel alongside the TOC so the frontend never recomputes them.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct Disc {
+    drive: DriveInfo,
+    toc: Toc,
+    musicbrainz_disc_id: String,
+    freedb_id: String,
+}
+
 #[tauri::command]
 fn core_version() -> &'static str {
     toccata_core::version()
 }
 
+#[tauri::command]
+fn list_drives() -> Vec<DriveInfo> {
+    drive::list()
+}
+
+#[tauri::command]
+fn read_disc(drive_id: String) -> Result<Disc, DriveError> {
+    let mut handle = drive::open(&drive_id)?;
+    let toc = handle.read_toc()?;
+
+    Ok(Disc {
+        drive: handle.info().clone(),
+        musicbrainz_disc_id: toc.musicbrainz_disc_id(),
+        freedb_id: toc.freedb_id(),
+        toc,
+    })
+}
+
+#[tauri::command]
+fn eject(drive_id: String) -> Result<(), DriveError> {
+    drive::open(&drive_id)?.eject()
+}
+
 fn main() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![core_version])
+        .invoke_handler(tauri::generate_handler![
+            core_version,
+            list_drives,
+            read_disc,
+            eject
+        ])
         .run(tauri::generate_context!())
         .expect("failed to start the Tauri application");
 }

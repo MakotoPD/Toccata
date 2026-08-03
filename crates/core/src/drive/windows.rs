@@ -166,6 +166,31 @@ fn parse_toc(device: &str, raw: &CDROM_TOC) -> Result<Toc, DriveError> {
     })
 }
 
+fn wide(value: &str) -> Vec<u16> {
+    value.encode_utf16().chain(std::iter::once(0)).collect()
+}
+
+fn map_error(device: &str, operation: &'static str, error: &windows::core::Error) -> DriveError {
+    let code = (error.code().0 & 0xffff) as u32;
+
+    if code == ERROR_NOT_READY.0 {
+        DriveError::NoDisc {
+            device: device.to_owned(),
+        }
+    } else if code == ERROR_ACCESS_DENIED.0 {
+        DriveError::PermissionDenied {
+            device: device.to_owned(),
+            group: None,
+        }
+    } else {
+        DriveError::Io {
+            device: device.to_owned(),
+            operation,
+            status: code as i32,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -184,7 +209,7 @@ mod tests {
     fn toc_with(entries: &[TRACK_DATA]) -> CDROM_TOC {
         let mut raw = CDROM_TOC {
             // Two bytes for the track numbers plus the descriptors.
-            Length: ((2 + entries.len() * size_of::<TRACK_DATA>()) as u16).to_be_bytes(),
+            Length: ((2 + size_of_val(entries)) as u16).to_be_bytes(),
             FirstTrack: 1,
             LastTrack: entries.len().saturating_sub(1) as u8,
             TrackData: [TRACK_DATA::default(); 100],
@@ -220,30 +245,5 @@ mod tests {
             parse_toc(r"\\.\E:", &raw),
             Err(DriveError::NoDisc { .. })
         ));
-    }
-}
-
-fn wide(value: &str) -> Vec<u16> {
-    value.encode_utf16().chain(std::iter::once(0)).collect()
-}
-
-fn map_error(device: &str, operation: &'static str, error: &windows::core::Error) -> DriveError {
-    let code = (error.code().0 & 0xffff) as u32;
-
-    if code == ERROR_NOT_READY.0 {
-        DriveError::NoDisc {
-            device: device.to_owned(),
-        }
-    } else if code == ERROR_ACCESS_DENIED.0 {
-        DriveError::PermissionDenied {
-            device: device.to_owned(),
-            group: None,
-        }
-    } else {
-        DriveError::Io {
-            device: device.to_owned(),
-            operation,
-            status: code as i32,
-        }
     }
 }

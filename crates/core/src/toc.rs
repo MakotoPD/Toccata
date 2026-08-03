@@ -20,7 +20,10 @@ pub const FRAMES_PER_SECOND: u32 = 75;
 /// Frames of lead-in that separate a sector address from a frame offset.
 pub const LEAD_IN_FRAMES: u32 = 150;
 
-#[derive(Debug, thiserror::Error, PartialEq, Eq)]
+/// Like [`crate::drive::DriveError`], this travels to the UI as a code plus
+/// the numbers behind it, never as a finished sentence.
+#[derive(Debug, thiserror::Error, PartialEq, Eq, Serialize)]
+#[serde(tag = "code", rename_all = "camelCase")]
 pub enum TocError {
     #[error("the disc reports no tracks")]
     Empty,

@@ -65,19 +65,7 @@ pub enum DriveError {
     },
 
     #[error("the disc in {device} reported an unusable table of contents")]
-    UnreadableToc {
-        device: String,
-        #[serde(serialize_with = "serialize_display")]
-        reason: TocError,
-    },
-}
-
-fn serialize_display<S, T>(value: &T, serializer: S) -> Result<S::Ok, S::Error>
-where
-    S: serde::Serializer,
-    T: std::fmt::Display,
-{
-    serializer.collect_str(value)
+    UnreadableToc { device: String, reason: TocError },
 }
 
 pub trait Drive {

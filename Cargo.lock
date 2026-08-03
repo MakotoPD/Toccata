@@ -3304,6 +3304,7 @@ dependencies = [
 name = "toccata"
 version = "0.1.0"
 dependencies = [
+ "serde",
  "tauri",
  "tauri-build",
  "toccata-core",

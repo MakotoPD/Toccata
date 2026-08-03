@@ -9,5 +9,45 @@
   },
   "about": {
     "core": "Core {version}"
+  },
+  "drive": {
+    "label": "Drive",
+    "none": "No optical drive found",
+    "rescan": "Rescan",
+    "read": "Read disc",
+    "reading": "Reading",
+    "eject": "Eject"
+  },
+  "disc": {
+    "waiting": "Insert an audio CD and read the disc",
+    "tracks": "Tracks",
+    "trackCount": "{count} track | {count} tracks",
+    "totalTime": "Total time",
+    "musicbrainzId": "MusicBrainz Disc ID",
+    "freedbId": "FreeDB ID"
+  },
+  "track": {
+    "number": "Track",
+    "start": "Start",
+    "length": "Length",
+    "data": "Data",
+    "preEmphasis": "Pre-emphasis"
+  },
+  "error": {
+    "drive": {
+      "notFound": "Drive {device} is no longer available.",
+      "permissionDenied": "No permission to access {device}.",
+      "permissionDeniedGroup": "No permission to access {device}. Add your user to the {group} group and log in again.",
+      "noDisc": "There is no disc in {device}.",
+      "notAnAudioDisc": "The disc in {device} has no audio tracks.",
+      "io": "{device} refused {operation} with status {status}.",
+      "unreadableToc": "The disc in {device} reported a table of contents that cannot be used."
+    },
+    "toc": {
+      "empty": "The disc reports no tracks at all.",
+      "outOfOrder": "Track {number} starts at sector {start}, which is not after the previous track at sector {previous}.",
+      "leadOutTooEarly": "The lead-out at sector {leadOut} falls inside the last track, which starts at sector {lastTrackStart}."
+    },
+    "unknown": "Something went wrong."
   }
 }

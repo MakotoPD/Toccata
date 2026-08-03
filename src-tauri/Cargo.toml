@@ -10,5 +10,6 @@ license.workspace = true
 tauri-build = { version = "2.6.3", features = [] }
 
 [dependencies]
+serde = { version = "1.0.229", features = ["derive"] }
 tauri = { version = "2.11.5", features = [] }
 toccata-core = { path = "../crates/core" }

@@ -2,43 +2,149 @@
 import { invoke, isTauri } from '@tauri-apps/api/core'
 
 const { t, locale, locales, setLocale } = useI18n()
+const { fromFrames } = useCdTime()
+const { drives, selectedId, disc, faultMessage, busy, refresh, read, eject, select } = useDisc()
 
-// Runs in a plain browser during `nuxt dev`, where there is no backend to ask.
 const coreVersion = ref<string | null>(null)
+
+const totalFrames = computed(() =>
+  disc.value ? disc.value.toc.leadOut - (disc.value.toc.tracks[0]?.start ?? 0) : 0,
+)
+
 onMounted(async () => {
-  if (isTauri()) {
-    coreVersion.value = await invoke<string>('core_version')
+  if (!isTauri()) {
+    return
   }
+
+  coreVersion.value = await invoke<string>('core_version')
+  await refresh()
 })
 </script>
 
 <template>
-  <main
-    class="relative grid min-h-full place-items-center bg-chassis-950 bg-[repeating-radial-gradient(circle_at_50%_45%,transparent_0,transparent_11px,rgba(217,180,99,0.045)_12px,transparent_13px)] font-sans text-etch-100"
+  <div
+    class="flex h-full flex-col overflow-hidden bg-chassis-950 bg-[repeating-radial-gradient(circle_at_82%_-10%,transparent_0,transparent_23px,rgba(217,180,99,0.03)_24px,transparent_25px)] font-sans text-etch-100"
   >
-    <div class="flex flex-col items-center gap-10 px-8">
-      <header class="flex flex-col items-center gap-5">
-        <h1 class="font-display text-6xl font-normal tracking-[0.2em] indent-[0.2em]">Toccata</h1>
-        <div class="h-px w-24 bg-brass-500" />
-        <p class="text-xs uppercase tracking-[0.28em] text-etch-400">{{ t('app.tagline') }}</p>
-      </header>
+    <header class="flex shrink-0 items-center gap-6 border-b border-chassis-800 px-8 py-5">
+      <h1 class="font-display text-xl tracking-[0.22em] indent-[0.22em]">Toccata</h1>
 
+      <div class="ml-auto flex items-center gap-3">
+        <label class="text-[0.6875rem] uppercase tracking-[0.18em] text-etch-600" for="drive">
+          {{ t('drive.label') }}
+        </label>
+        <select
+          id="drive"
+          :value="selectedId ?? ''"
+          :disabled="drives.length === 0"
+          class="rounded-xs border border-chassis-700 bg-chassis-900 px-3 py-1.5 text-sm text-etch-100 focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-brass-500 disabled:text-etch-600"
+          @change="select(($event.target as HTMLSelectElement).value)"
+        >
+          <option v-if="drives.length === 0" value="">{{ t('drive.none') }}</option>
+          <option v-for="option in drives" :key="option.id" :value="option.id">
+            {{ option.name }}
+          </option>
+        </select>
+
+        <button
+          type="button"
+          class="rounded-xs border border-chassis-700 px-3 py-1.5 text-[0.6875rem] uppercase tracking-[0.16em] text-etch-400 transition-colors hover:border-etch-600 hover:text-etch-100 focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-brass-500 disabled:opacity-40"
+          :disabled="busy"
+          @click="refresh"
+        >
+          {{ t('drive.rescan') }}
+        </button>
+
+        <button
+          type="button"
+          class="rounded-xs border border-brass-500 bg-brass-500/10 px-3 py-1.5 text-[0.6875rem] uppercase tracking-[0.16em] text-brass-400 transition-colors hover:bg-brass-500/20 focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-brass-500 disabled:opacity-40"
+          :disabled="busy || !selectedId"
+          @click="read"
+        >
+          {{ busy ? t('drive.reading') : t('drive.read') }}
+        </button>
+
+        <button
+          type="button"
+          class="rounded-xs border border-chassis-700 px-3 py-1.5 text-[0.6875rem] uppercase tracking-[0.16em] text-etch-400 transition-colors hover:border-etch-600 hover:text-etch-100 focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-brass-500 disabled:opacity-40"
+          :disabled="busy || !selectedId"
+          @click="eject"
+        >
+          {{ t('drive.eject') }}
+        </button>
+      </div>
+    </header>
+
+    <main class="min-h-0 flex-1 overflow-y-auto px-8 py-8">
+      <p
+        v-if="faultMessage"
+        role="alert"
+        class="rounded-xs border border-chassis-700 border-l-2 border-l-brass-500 bg-chassis-900 px-4 py-3 text-sm text-etch-100"
+      >
+        {{ faultMessage }}
+      </p>
+
+      <p
+        v-else-if="!disc"
+        class="py-16 text-center text-xs uppercase tracking-[0.24em] text-etch-600"
+      >
+        {{ t('disc.waiting') }}
+      </p>
+
+      <template v-else>
+        <dl class="mb-8 grid gap-x-10 gap-y-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div>
+            <dt class="text-[0.625rem] uppercase tracking-[0.18em] text-etch-600">
+              {{ t('disc.totalTime') }}
+            </dt>
+            <dd class="mt-1 font-mono tabular-nums text-lg text-etch-100">
+              {{ fromFrames(totalFrames) }}
+            </dd>
+          </div>
+          <div>
+            <dt class="text-[0.625rem] uppercase tracking-[0.18em] text-etch-600">
+              {{ t('disc.tracks') }}
+            </dt>
+            <dd class="mt-1 font-mono tabular-nums text-lg text-etch-100">
+              {{ t('disc.trackCount', disc.toc.tracks.length) }}
+            </dd>
+          </div>
+          <div>
+            <dt class="text-[0.625rem] uppercase tracking-[0.18em] text-etch-600">
+              {{ t('disc.musicbrainzId') }}
+            </dt>
+            <dd class="mt-1 font-mono text-xs break-all text-brass-400">
+              {{ disc.musicbrainzDiscId }}
+            </dd>
+          </div>
+          <div>
+            <dt class="text-[0.625rem] uppercase tracking-[0.18em] text-etch-600">
+              {{ t('disc.freedbId') }}
+            </dt>
+            <dd class="mt-1 font-mono text-xs text-etch-400">{{ disc.freedbId }}</dd>
+          </div>
+        </dl>
+
+        <TrackList :tracks="disc.toc.tracks" />
+      </template>
+    </main>
+
+    <footer class="flex shrink-0 items-center gap-4 border-t border-chassis-800 px-8 py-4">
       <nav :aria-label="t('settings.language.label')" class="flex items-center gap-1">
         <button
           v-for="option in locales"
           :key="option.code"
           type="button"
           :aria-pressed="option.code === locale"
-          class="rounded-xs px-3 py-1 text-xs uppercase tracking-[0.18em] text-etch-600 transition-colors hover:text-etch-100 focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-4 focus-visible:outline-brass-500 aria-pressed:text-brass-400"
+          class="rounded-xs px-2 py-1 text-[0.625rem] uppercase tracking-[0.18em] text-etch-600 transition-colors hover:text-etch-100 focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-brass-500 aria-pressed:text-brass-400"
           @click="setLocale(option.code)"
         >
           {{ option.code }}
         </button>
       </nav>
 
-      <p v-if="coreVersion" class="font-mono text-[0.6875rem] tracking-wider text-etch-600">
+      <p v-if="coreVersion" class="ml-auto font-mono text-[0.625rem] tracking-wider text-etch-600">
         {{ t('about.core', { version: coreVersion }) }}
       </p>
-    </div>
-  </main>
+    </footer>
+  </div>
 </template>

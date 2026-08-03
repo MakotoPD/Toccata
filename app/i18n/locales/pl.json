@@ -9,5 +9,45 @@
   },
   "about": {
     "core": "Rdzeń {version}"
+  },
+  "drive": {
+    "label": "Napęd",
+    "none": "Nie znaleziono napędu optycznego",
+    "rescan": "Szukaj ponownie",
+    "read": "Odczytaj płytę",
+    "reading": "Odczyt",
+    "eject": "Wysuń"
+  },
+  "disc": {
+    "waiting": "Włóż płytę CD Audio i odczytaj ją",
+    "tracks": "Ścieżki",
+    "trackCount": "{count} ścieżka | {count} ścieżki | {count} ścieżek",
+    "totalTime": "Łączny czas",
+    "musicbrainzId": "MusicBrainz Disc ID",
+    "freedbId": "FreeDB ID"
+  },
+  "track": {
+    "number": "Ścieżka",
+    "start": "Początek",
+    "length": "Długość",
+    "data": "Dane",
+    "preEmphasis": "Pre-emfaza"
+  },
+  "error": {
+    "drive": {
+      "notFound": "Napęd {device} nie jest już dostępny.",
+      "permissionDenied": "Brak uprawnień do urządzenia {device}.",
+      "permissionDeniedGroup": "Brak uprawnień do urządzenia {device}. Dodaj użytkownika do grupy {group} i zaloguj się ponownie.",
+      "noDisc": "W napędzie {device} nie ma płyty.",
+      "notAnAudioDisc": "Płyta w napędzie {device} nie zawiera ścieżek audio.",
+      "io": "Napęd {device} odrzucił operację {operation} ze statusem {status}.",
+      "unreadableToc": "Płyta w napędzie {device} zwróciła spis treści, którego nie da się użyć."
+    },
+    "toc": {
+      "empty": "Płyta nie zgłasza żadnych ścieżek.",
+      "outOfOrder": "Ścieżka {number} zaczyna się na sektorze {start}, czyli nie po poprzedniej ścieżce z sektora {previous}.",
+      "leadOutTooEarly": "Lead-out na sektorze {leadOut} wypada wewnątrz ostatniej ścieżki, która zaczyna się na sektorze {lastTrackStart}."
+    },
+    "unknown": "Coś poszło nie tak."
   }
 }
