@@ -16,6 +16,7 @@
     "typecheck": "nuxt typecheck"
   },
   "dependencies": {
+    "@nuxtjs/i18n": "^10.6.0",
     "@tailwindcss/vite": "^4.3.3",
     "nuxt": "^4.5.1",
     "tailwindcss": "^4.3.3"

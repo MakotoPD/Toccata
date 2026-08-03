@@ -1,0 +1,13 @@
+{
+  "app": {
+    "tagline": "Bezstratne zgrywanie płyt CD Audio"
+  },
+  "settings": {
+    "language": {
+      "label": "Język"
+    }
+  },
+  "about": {
+    "core": "Rdzeń {version}"
+  }
+}

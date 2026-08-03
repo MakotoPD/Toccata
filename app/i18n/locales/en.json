@@ -1,0 +1,13 @@
+{
+  "app": {
+    "tagline": "Bit-perfect CD Audio ripping"
+  },
+  "settings": {
+    "language": {
+      "label": "Language"
+    }
+  },
+  "about": {
+    "core": "Core {version}"
+  }
+}

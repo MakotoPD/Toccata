@@ -1,1 +1,37 @@
 @import 'tailwindcss';
+
+/* Instrument-panel palette: warm near-black chassis, hairline rules, a single
+   brass accent for anything the user is meant to act on or read as active. */
+@theme {
+  --color-chassis-950: #0c0b0a;
+  --color-chassis-900: #131211;
+  --color-chassis-800: #1b1917;
+  --color-chassis-700: #26241f;
+  --color-etch-100: #ebe7de;
+  --color-etch-400: #9b958a;
+  --color-etch-600: #6b6660;
+  --color-brass-400: #d9b463;
+  --color-brass-500: #c2963c;
+
+  /* Swapped for self-hosted faces once licences are settled; every rule below
+     goes through these variables so that stays a one-file change. */
+  --font-display: 'Iowan Old Style', 'Palatino Linotype', 'Book Antiqua', Palatino, ui-serif, serif;
+  --font-sans: ui-sans-serif, 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif;
+  --font-mono: ui-monospace, 'Cascadia Mono', 'SF Mono', 'DejaVu Sans Mono', monospace;
+}
+
+/* Chrome-less window: the shell paints its own background edge to edge, and a
+   desktop app has no reason to rubber-band or select its own chassis text. */
+@layer base {
+  html,
+  body,
+  #__nuxt {
+    height: 100%;
+  }
+
+  body {
+    overscroll-behavior: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+}
