@@ -14,6 +14,7 @@ use serde::Serialize;
 
 use crate::toc::Toc;
 
+pub mod ctdb;
 pub mod musicbrainz;
 
 /// Which database a candidate came from. Shown next to every result, because
@@ -22,10 +23,15 @@ pub mod musicbrainz;
 #[serde(rename_all = "camelCase")]
 pub enum SourceId {
     MusicBrainz,
+    Ctdb,
 }
 
 #[derive(Debug, thiserror::Error, Serialize)]
-#[serde(tag = "code", rename_all = "camelCase")]
+#[serde(
+    tag = "code",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
 pub enum MetadataError {
     #[error("{source_id:?} could not be reached")]
     Unreachable { source_id: SourceId },
@@ -63,6 +69,9 @@ pub struct TrackMetadata {
 #[serde(rename_all = "camelCase")]
 pub struct ReleaseCandidate {
     pub source_id: SourceId,
+    /// Where the answering source got it from, for the ones that aggregate
+    /// other databases rather than curating their own.
+    pub relayed_from: Option<String>,
     /// Identifier within the source, for fetching the rest later.
     pub id: String,
     pub title: String,
@@ -78,6 +87,9 @@ pub struct ReleaseCandidate {
     /// the one medium that matched.
     pub disc_number: u32,
     pub disc_total: Option<u32>,
+    /// Cover art the source already knows about, ready to use before the
+    /// dedicated art sources are consulted.
+    pub cover_art: Option<String>,
     pub tracks: Vec<TrackMetadata>,
 }
 
@@ -136,6 +148,11 @@ impl Cascade {
 
 impl Default for Cascade {
     fn default() -> Self {
-        Self::new(vec![Box::new(musicbrainz::MusicBrainz::default())])
+        Self::new(vec![
+            Box::new(musicbrainz::MusicBrainz::default()),
+            // CTDB replicates MusicBrainz, Discogs and freedb and matches on a
+            // fuzzy TOC, so it reaches discs an exact Disc ID misses.
+            Box::new(ctdb::Ctdb::default()),
+        ])
     }
 }

@@ -63,6 +63,9 @@ function details(candidate: ReleaseCandidate) {
             class="mt-1.5 flex flex-wrap items-center gap-x-2 text-[0.6875rem] tracking-wide text-etch-600"
           >
             <span class="font-mono">{{ t('source.' + candidate.sourceId) }}</span>
+            <span v-if="candidate.relayedFrom">
+              {{ t('metadata.relayedFrom', { source: candidate.relayedFrom }) }}
+            </span>
             <span aria-hidden="true">·</span>
             <span class="font-mono tabular-nums">
               {{ t('metadata.trackCount', candidate.tracks.length) }}

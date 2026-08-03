@@ -38,7 +38,11 @@ pub struct DriveInfo {
 /// Errors carry a code and the values needed to describe what went wrong.
 /// They are never prose: the frontend owns every sentence the user reads.
 #[derive(Debug, thiserror::Error, Serialize)]
-#[serde(tag = "code", rename_all = "camelCase")]
+#[serde(
+    tag = "code",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
 pub enum DriveError {
     #[error("no drive with id {device}")]
     NotFound { device: String },

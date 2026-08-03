@@ -22,6 +22,10 @@ const USER_AGENT: &str = concat!(
 );
 const TIMEOUT: Duration = Duration::from_secs(15);
 
+/// The service allows roughly one request a second, so a rejected call is
+/// worth repeating once after that window has passed.
+const RETRY_AFTER: Duration = Duration::from_millis(1500);
+
 pub struct MusicBrainz {
     client: reqwest::Client,
 }
@@ -38,6 +42,22 @@ impl Default for MusicBrainz {
     }
 }
 
+impl MusicBrainz {
+    async fn get(&self, url: &str) -> Result<reqwest::Response, MetadataError> {
+        self.client
+            .get(url)
+            .query(&[
+                ("fmt", "json"),
+                ("inc", "recordings+artist-credits+release-groups+labels"),
+            ])
+            .send()
+            .await
+            .map_err(|_| MetadataError::Unreachable {
+                source_id: SourceId::MusicBrainz,
+            })
+    }
+}
+
 impl MetadataSource for MusicBrainz {
     fn id(&self) -> SourceId {
         SourceId::MusicBrainz
@@ -48,18 +68,14 @@ impl MetadataSource for MusicBrainz {
             let disc_id = toc.musicbrainz_disc_id();
             let url = format!("{BASE_URL}/discid/{disc_id}");
 
-            let response = self
-                .client
-                .get(&url)
-                .query(&[
-                    ("fmt", "json"),
-                    ("inc", "recordings+artist-credits+release-groups+labels"),
-                ])
-                .send()
-                .await
-                .map_err(|_| MetadataError::Unreachable {
-                    source_id: SourceId::MusicBrainz,
-                })?;
+            let mut response = self.get(&url).await?;
+
+            // The rate limiter answers 503 and expects the caller to wait,
+            // which is worth one attempt before giving up on the disc.
+            if response.status() == reqwest::StatusCode::SERVICE_UNAVAILABLE {
+                tokio::time::sleep(RETRY_AFTER).await;
+                response = self.get(&url).await?;
+            }
 
             // An unknown disc is a plain 404 and simply means no candidates.
             if response.status() == reqwest::StatusCode::NOT_FOUND {
@@ -93,6 +109,7 @@ fn into_candidate(release: Release) -> ReleaseCandidate {
 
     ReleaseCandidate {
         source_id: SourceId::MusicBrainz,
+        relayed_from: None,
         id: release.id,
         title: release.title,
         artist: join_credits(&release.artist_credit),
@@ -106,6 +123,7 @@ fn into_candidate(release: Release) -> ReleaseCandidate {
         disambiguation: release.disambiguation.filter(|value| !value.is_empty()),
         disc_number: medium.map_or(1, |medium| medium.position),
         disc_total: None,
+        cover_art: None,
         tracks: medium
             .map(|medium| {
                 medium

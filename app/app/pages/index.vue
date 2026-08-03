@@ -117,6 +117,9 @@ onMounted(async () => {
           <p class="mt-1 text-sm text-etch-400">{{ metadata.release.value.artist }}</p>
           <p class="mt-2 text-[0.625rem] uppercase tracking-[0.18em] text-etch-600">
             {{ t('metadata.from', { source: t('source.' + metadata.release.value.sourceId) }) }}
+            <span v-if="metadata.release.value.relayedFrom">
+              {{ t('metadata.relayedFrom', { source: metadata.release.value.relayedFrom }) }}
+            </span>
           </p>
         </header>
 

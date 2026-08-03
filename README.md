@@ -14,7 +14,7 @@ M4A (both AAC and ALAC variants).
 
 Early development. The application reads the table of contents of an audio CD
 on all three platforms, computes the MusicBrainz and FreeDB disc identifiers,
-and looks the disc up in MusicBrainz. Nothing is ripped yet.
+and identifies it through MusicBrainz and CUETools DB. Nothing is ripped yet.
 
 ```bash
 pnpm install && pnpm tauri dev
@@ -36,11 +36,12 @@ whole is GPL. This rules out a permissive license.
 | tauri, tauri-build | Apache-2.0 OR MIT |
 | serde, serde_json | MIT OR Apache-2.0 |
 | reqwest | MIT OR Apache-2.0 |
+| roxmltree | MIT OR Apache-2.0 |
 | sha1 | MIT OR Apache-2.0 |
 | thiserror | MIT OR Apache-2.0 |
 | windows (Windows only) | Apache-2.0 OR MIT |
 | libc (Linux and macOS only) | MIT OR Apache-2.0 |
-| tokio (development only) | MIT |
+| tokio | MIT |
 | nuxt, vue | MIT |
 | tailwindcss, @tailwindcss/vite | MIT |
 | @nuxtjs/i18n, vue-i18n | MIT |

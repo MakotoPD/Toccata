@@ -23,7 +23,11 @@ pub const LEAD_IN_FRAMES: u32 = 150;
 /// Like [`crate::drive::DriveError`], this travels to the UI as a code plus
 /// the numbers behind it, never as a finished sentence.
 #[derive(Debug, thiserror::Error, PartialEq, Eq, Serialize)]
-#[serde(tag = "code", rename_all = "camelCase")]
+#[serde(
+    tag = "code",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
 pub enum TocError {
     #[error("the disc reports no tracks")]
     Empty,

@@ -46,10 +46,12 @@
     "discOf": "Disc {number} of {total}",
     "disc": "Disc {number}",
     "trackCount": "{count} track | {count} tracks",
-    "unknownField": "unknown"
+    "unknownField": "unknown",
+    "relayedFrom": "via {source}"
   },
   "source": {
-    "musicBrainz": "MusicBrainz"
+    "musicBrainz": "MusicBrainz",
+    "ctdb": "CTDB"
   },
   "error": {
     "drive": {
