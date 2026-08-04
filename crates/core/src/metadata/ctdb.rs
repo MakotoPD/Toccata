@@ -174,6 +174,7 @@ fn into_candidate(node: roxmltree::Node<'_, '_>) -> ReleaseCandidate {
                 .filter(|child| child.has_tag_name((NAMESPACE, "track")))
                 .count() as u32,
         ],
+        media: Vec::new(),
         cover_art: coverart.and_then(|node| text(node.attribute("uri"))),
         tracks: node
             .children()

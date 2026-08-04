@@ -12,7 +12,7 @@ use std::time::Duration;
 
 use serde::Deserialize;
 
-use super::{MetadataError, ReleaseCandidate, SourceId, TrackMetadata};
+use super::{Medium, MetadataError, ReleaseCandidate, SourceId, TrackMetadata};
 
 const BASE_URL: &str = "https://api.discogs.com";
 
@@ -208,9 +208,75 @@ fn into_summary(result: SearchResult) -> ReleaseCandidate {
         disc_total: None,
         // A search hit says nothing about how the tracks are spread over discs.
         medium_track_counts: Vec::new(),
+        media: Vec::new(),
         cover_art: result.cover_image.filter(|url| url.starts_with("http")),
         tracks: Vec::new(),
     }
+}
+
+/// Splits a flat track list into the discs it actually describes.
+///
+/// Discogs writes a boxed set as one list with positions like `2-3`, and the
+/// disc number in front is the only thing separating one CD from the next.
+/// Flattening that puts the first disc's titles on whichever disc is in the
+/// drive, which is worse than having no titles at all.
+fn group_media(tracklist: &[Track], release_artist: &str) -> Vec<Medium> {
+    let mut media: Vec<Medium> = Vec::new();
+
+    for track in tracklist {
+        // Headings and index entries name a section; they are not tracks.
+        if track.track_type.as_deref().unwrap_or("track") != "track" {
+            continue;
+        }
+
+        let disc = disc_of(&track.position).unwrap_or(1);
+        let entry = TrackMetadata {
+            number: 0,
+            title: track.title.trim().to_owned(),
+            artist: track
+                .artists
+                .first()
+                .map(|artist| clean_artist(&artist.name))
+                .unwrap_or_else(|| release_artist.to_owned()),
+            length_ms: parse_duration(&track.duration),
+        };
+
+        match media.iter_mut().find(|medium| medium.position == disc) {
+            Some(medium) => medium.tracks.push(entry),
+            None => media.push(Medium {
+                position: disc,
+                title: None,
+                format: None,
+                tracks: vec![entry],
+            }),
+        }
+    }
+
+    media.sort_by_key(|medium| medium.position);
+
+    // Numbering follows the order on the disc rather than the printed position,
+    // which is what lines up with the table of contents.
+    for medium in &mut media {
+        for (index, track) in medium.tracks.iter_mut().enumerate() {
+            track.number = index as u8 + 1;
+        }
+    }
+
+    media
+}
+
+/// The disc a printed position belongs to, when it names one at all.
+fn disc_of(position: &str) -> Option<u32> {
+    let (disc, track) = position.trim().split_once('-')?;
+
+    // The second half has to look like a track number, or this is a date, a
+    // vinyl side range, or something else that only looks like a position.
+    if track.is_empty() || !track.chars().next()?.is_ascii_digit() {
+        return None;
+    }
+
+    let digits: String = disc.chars().filter(char::is_ascii_digit).collect();
+    digits.parse().ok()
 }
 
 fn into_candidate(release: Release) -> ReleaseCandidate {
@@ -220,24 +286,11 @@ fn into_candidate(release: Release) -> ReleaseCandidate {
         .map(|artist| clean_artist(&artist.name))
         .unwrap_or_default();
 
-    // Sub-headings and index tracks have no position of their own; only real
-    // tracks are numbered, and they are numbered by their order on the disc.
-    let tracks: Vec<TrackMetadata> = release
-        .tracklist
-        .iter()
-        .filter(|track| track.track_type.as_deref().unwrap_or("track") == "track")
-        .enumerate()
-        .map(|(index, track)| TrackMetadata {
-            number: index as u8 + 1,
-            title: track.title.trim().to_owned(),
-            artist: track
-                .artists
-                .first()
-                .map(|artist| clean_artist(&artist.name))
-                .unwrap_or_else(|| artist.clone()),
-            length_ms: parse_duration(&track.duration),
-        })
-        .collect();
+    let media = group_media(&release.tracklist, &artist);
+    let tracks = media
+        .first()
+        .map(|medium| medium.tracks.clone())
+        .unwrap_or_default();
 
     ReleaseCandidate {
         source_id: SourceId::Discogs,
@@ -262,9 +315,13 @@ fn into_candidate(release: Release) -> ReleaseCandidate {
         composer: None,
         comment: None,
         compilation: false,
-        disc_number: 1,
-        disc_total: None,
-        medium_track_counts: vec![tracks.len() as u32],
+        disc_number: media.first().map_or(1, |medium| medium.position),
+        disc_total: (media.len() > 1).then_some(media.len() as u32),
+        medium_track_counts: media
+            .iter()
+            .map(|medium| medium.tracks.len() as u32)
+            .collect(),
+        media,
         // The primary image is the front cover; anything else is a booklet
         // scan or a photograph of the disc.
         cover_art: release
@@ -364,6 +421,8 @@ struct Image {
 struct Track {
     #[serde(rename = "type_")]
     track_type: Option<String>,
+    #[serde(default)]
+    position: String,
     title: String,
     #[serde(default)]
     duration: String,
@@ -429,6 +488,74 @@ mod tests {
         assert_eq!(parse_duration("  "), None);
     }
 
+    #[test]
+    fn reads_the_disc_out_of_a_printed_position() {
+        assert_eq!(disc_of("1-1"), Some(1));
+        assert_eq!(disc_of("3-7"), Some(3));
+        assert_eq!(disc_of("CD2-4"), Some(2));
+        // A single disc prints bare numbers, and vinyl prints sides.
+        assert_eq!(disc_of("4"), None);
+        assert_eq!(disc_of("A1"), None);
+        assert_eq!(disc_of(""), None);
+    }
+
+    // The real shape of a three disc set, taken from release 37598709.
+    const BOXED_SET: &str = r#"{
+      "id": 37598709,
+      "title": "Reklamacja'47",
+      "artists": [{ "name": "Oki (14)" }],
+      "tracklist": [
+        { "type_": "heading", "position": "", "title": "CD1" },
+        { "type_": "track", "position": "1-1", "title": "My Love" },
+        { "type_": "track", "position": "1-2", "title": "Nobodylovesu" },
+        { "type_": "heading", "position": "", "title": "CD2" },
+        { "type_": "track", "position": "2-1", "title": "Jeszcze Raz?" },
+        { "type_": "heading", "position": "", "title": "CD3" },
+        { "type_": "track", "position": "3-1", "title": "Znasz Mnie?" },
+        { "type_": "track", "position": "3-2", "title": "Goat/Simp" },
+        { "type_": "track", "position": "3-3", "title": "Bro" }
+      ]
+    }"#;
+
+    // Flattening this used to write the first disc's titles onto whichever
+    // disc was in the drive.
+    #[test]
+    fn a_boxed_set_keeps_its_discs_apart() {
+        let release: Release = serde_json::from_str(BOXED_SET).expect("the sample parses");
+        let candidate = into_candidate(release);
+
+        assert_eq!(candidate.medium_track_counts, vec![2, 1, 3]);
+        assert_eq!(candidate.disc_total, Some(3));
+        assert_eq!(candidate.media.len(), 3);
+
+        let third = &candidate.media[2];
+        assert_eq!(third.position, 3);
+        assert_eq!(third.tracks.len(), 3);
+        assert_eq!(third.tracks[0].title, "Znasz Mnie?");
+        assert_eq!(
+            third.tracks[0].number, 1,
+            "each disc numbers its own tracks from one"
+        );
+        assert_eq!(third.tracks[2].number, 3);
+    }
+
+    #[test]
+    fn switching_disc_replaces_the_tracks_and_says_which_one_it_is() {
+        let release: Release = serde_json::from_str(BOXED_SET).expect("the sample parses");
+        let mut candidate = into_candidate(release);
+
+        assert_eq!(
+            candidate.tracks[0].title, "My Love",
+            "the first disc to start"
+        );
+
+        candidate.use_medium(3);
+        assert_eq!(candidate.disc_number, 3);
+        assert_eq!(candidate.disc_total, Some(3));
+        assert_eq!(candidate.tracks.len(), 3);
+        assert_eq!(candidate.tracks[0].title, "Znasz Mnie?");
+    }
+
     // Trimmed from the answer for release 23525564.
     const RELEASE: &str = r#"{
       "id": 23525564,
@@ -446,9 +573,9 @@ mod tests {
         { "type": "primary", "uri": "https://i.discogs.com/front.jpeg" }
       ],
       "tracklist": [
-        { "type_": "heading", "title": "Side A", "duration": "" },
-        { "type_": "track", "title": "I To Jest Fakt", "duration": "2:56" },
-        { "type_": "track", "title": "Perły", "duration": "", "artists": [{ "name": "Guest (3)" }] }
+        { "type_": "heading", "position": "", "title": "Side A", "duration": "" },
+        { "type_": "track", "position": "1", "title": "I To Jest Fakt", "duration": "2:56" },
+        { "type_": "track", "position": "2", "title": "Perły", "duration": "", "artists": [{ "name": "Guest (3)" }] }
       ]
     }"#;
 
@@ -473,6 +600,8 @@ mod tests {
             "the primary image wins over the one that comes first"
         );
 
+        assert_eq!(candidate.media.len(), 1, "one disc, not one per track");
+        assert_eq!(candidate.disc_total, None, "a single disc is not a set");
         assert_eq!(candidate.tracks.len(), 2, "a heading is not a track");
         assert_eq!(candidate.tracks[0].title, "I To Jest Fakt");
         assert_eq!(candidate.tracks[0].length_ms, Some(176_000));

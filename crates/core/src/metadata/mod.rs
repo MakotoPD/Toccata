@@ -71,6 +71,19 @@ pub struct TrackMetadata {
     pub length_ms: Option<u64>,
 }
 
+/// One disc of a release. A boxed set is several of these, and only the user
+/// knows which one is in the drive.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Medium {
+    pub position: u32,
+    /// Named discs happen on boxed sets and on nothing else.
+    pub title: Option<String>,
+    /// CD, Vinyl, Digital Media, as the source records it.
+    pub format: Option<String>,
+    pub tracks: Vec<TrackMetadata>,
+}
+
 /// One candidate pressing. Several of these under a single disc ID is the
 /// normal case, so the choice belongs to the user.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -114,10 +127,29 @@ pub struct ReleaseCandidate {
     /// tracks themselves, so this is what a search hit can be compared with
     /// the table of contents on.
     pub medium_track_counts: Vec<u32>,
+    /// Every disc of the release, with its own tracks. Empty on a search hit,
+    /// since neither service lists tracks until the release itself is fetched.
+    #[serde(default)]
+    pub media: Vec<Medium>,
     /// Cover art the source already knows about, ready to use before the
     /// dedicated art sources are consulted.
     pub cover_art: Option<String>,
+    /// Tracks of the disc currently chosen out of [`Self::media`].
     pub tracks: Vec<TrackMetadata>,
+}
+
+impl ReleaseCandidate {
+    /// Switches to another disc of the release, which is what a boxed set
+    /// needs before anything can be tagged with it.
+    pub fn use_medium(&mut self, position: u32) {
+        let Some(medium) = self.media.iter().find(|medium| medium.position == position) else {
+            return;
+        };
+
+        self.tracks = medium.tracks.clone();
+        self.disc_number = medium.position;
+        self.disc_total = Some(self.media.len() as u32);
+    }
 }
 
 type Lookup<'a> =

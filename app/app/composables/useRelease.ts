@@ -70,6 +70,7 @@ export function useRelease() {
       discNumber: 1,
       discTotal: null,
       mediumTrackCounts: [(toc?.tracks ?? []).filter((track) => track.audio).length],
+      media: [],
       coverArt: null,
       tracks: rowsFor(toc, [], ''),
     }

@@ -2,6 +2,21 @@ import { invoke, isTauri } from '@tauri-apps/api/core'
 
 import type { LookupReport, MetadataFault, ReleaseCandidate, SourceId } from '~/types/disc'
 
+/** Switches a fetched release to one of its discs, tracks and numbering both. */
+function onMedium(release: ReleaseCandidate, position: number): ReleaseCandidate {
+  const medium = release.media.find((entry) => entry.position === position)
+  if (!medium) {
+    return release
+  }
+
+  return {
+    ...release,
+    tracks: medium.tracks,
+    discNumber: medium.position,
+    discTotal: release.media.length,
+  }
+}
+
 /**
  * Candidate pressings for the disc on screen. One Disc ID mapping to several
  * releases is ordinary, so nothing is ever picked automatically unless there
@@ -119,10 +134,28 @@ export function useMetadata() {
   }
 
   /**
-   * Turns a search hit, or a pasted address, into the release in use. Search
-   * results carry no tracks, so the full record has to be fetched.
+   * Fetches a release without putting it to use, which is what the search
+   * results need before they can show what is on each disc.
    */
-  async function adopt(reference: string, sourceId: SourceId | null = null) {
+  async function preview(reference: string, sourceId: SourceId | null = null) {
+    if (!isTauri()) {
+      return null
+    }
+
+    try {
+      return await invoke<ReleaseCandidate | null>('fetch_release', { reference, sourceId })
+    } catch (error) {
+      failures.value = [...failures.value, error as MetadataFault]
+      return null
+    }
+  }
+
+  /**
+   * Turns a search hit, or a pasted address, into the release in use. Search
+   * results carry no tracks, so the full record has to be fetched, and a boxed
+   * set still has to be told which of its discs is in the drive.
+   */
+  async function adopt(reference: string, sourceId: SourceId | null = null, medium?: number) {
     if (!isTauri() || searching.value) {
       return false
     }
@@ -130,14 +163,15 @@ export function useMetadata() {
     searching.value = true
 
     try {
-      const found = await invoke<ReleaseCandidate | null>('fetch_release', {
+      const fetched = await invoke<ReleaseCandidate | null>('fetch_release', {
         reference,
         sourceId,
       })
-      if (!found) {
+      if (!fetched) {
         return false
       }
 
+      const found = medium === undefined ? fetched : onMedium(fetched, medium)
       candidates.value = [found]
       results.value = []
       searched.value = true
@@ -188,6 +222,7 @@ export function useMetadata() {
     candidates,
     results,
     ranSearch,
+    preview,
     keep,
     discard,
     failures,

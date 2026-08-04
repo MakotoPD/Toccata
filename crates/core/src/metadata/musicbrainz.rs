@@ -12,7 +12,8 @@ use std::time::Duration;
 use serde::Deserialize;
 
 use super::{
-    Lookup, MetadataError, MetadataSource, ReleaseCandidate, SourceId, TrackMetadata, cover,
+    Lookup, Medium as ReleaseMedium, MetadataError, MetadataSource, ReleaseCandidate, SourceId,
+    TrackMetadata, cover,
 };
 use crate::toc::Toc;
 
@@ -275,6 +276,25 @@ fn into_candidate(release: Release, every_medium: bool) -> ReleaseCandidate {
             .iter()
             .map(|medium| medium.track_count.unwrap_or(medium.tracks.len() as u32))
             .collect(),
+        media: release
+            .media
+            .iter()
+            .map(|medium| ReleaseMedium {
+                position: medium.position,
+                title: medium.title.clone().filter(|value| !value.is_empty()),
+                format: medium.format.clone(),
+                tracks: medium
+                    .tracks
+                    .iter()
+                    .map(|track| TrackMetadata {
+                        number: track.position,
+                        title: track.title.clone(),
+                        artist: join_credits(&track.artist_credit),
+                        length_ms: track.length,
+                    })
+                    .collect(),
+            })
+            .collect(),
         // The release says whether the archive holds a front cover, which
         // saves asking for one that is not there.
         cover_art: release
@@ -372,6 +392,8 @@ struct Medium {
     /// Present on search hits, which carry no tracks of their own.
     #[serde(rename = "track-count")]
     track_count: Option<u32>,
+    title: Option<String>,
+    format: Option<String>,
     #[serde(default)]
     tracks: Vec<MediumTrack>,
 }

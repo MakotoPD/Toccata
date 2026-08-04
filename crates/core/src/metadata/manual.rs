@@ -128,6 +128,7 @@ mod tests {
             disc_number: 1,
             disc_total: Some(1),
             medium_track_counts: vec![1],
+            media: Vec::new(),
             cover_art: None,
             tracks: vec![TrackMetadata {
                 number: 1,

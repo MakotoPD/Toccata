@@ -78,7 +78,8 @@
     "barcode": "Kod kreskowy",
     "byBarcode": "Szukaj",
     "tracksOf": "Ścieżki wydania {title}",
-    "tracksHidden": "Nazwy ścieżek dojdą po użyciu tego wydania."
+    "discNumber": "Płyta {number}",
+    "noTracks": "To wydanie nie ma spisu ścieżek."
   },
   "editor": {
     "heading": "Edytuj ręcznie",

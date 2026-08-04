@@ -78,7 +78,8 @@
     "barcode": "Bar code",
     "byBarcode": "Look up",
     "tracksOf": "Tracks of {title}",
-    "tracksHidden": "Track names arrive once this release is used."
+    "discNumber": "Disc {number}",
+    "noTracks": "This release lists no tracks."
   },
   "editor": {
     "heading": "Edit by hand",

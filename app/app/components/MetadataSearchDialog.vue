@@ -1,7 +1,5 @@
 <script setup lang="ts">
-import type { ReleaseCandidate } from '~/types/disc'
-
-const props = defineProps<{ discTrackCount: number }>()
+defineProps<{ discTrackCount: number }>()
 const emit = defineEmits<{ close: [] }>()
 
 const { t } = useI18n()
@@ -12,45 +10,31 @@ const album = ref('')
 const barcode = ref('')
 const reference = ref('')
 const chosen = ref<string | null>(null)
+const chosenMedium = ref<number | null>(null)
 
 // Opening the dialog starts a fresh search rather than showing the last one.
 onMounted(() => {
   metadata.results.value = []
   metadata.ranSearch.value = false
 })
-const opened = ref<string[]>([])
 
 const selected = computed(
   () => metadata.results.value.find((result) => result.id === chosen.value) ?? null,
 )
 
-function matchesDisc(candidate: ReleaseCandidate) {
-  return candidate.mediumTrackCounts.includes(props.discTrackCount)
-}
-
-function details(candidate: ReleaseCandidate) {
-  return [
-    candidate.date,
-    candidate.country,
-    candidate.label,
-    candidate.barcode,
-    candidate.disambiguation,
-  ].filter(Boolean)
-}
-
-function toggleOpen(id: string) {
-  opened.value = opened.value.includes(id)
-    ? opened.value.filter((entry) => entry !== id)
-    : [...opened.value, id]
+function choose(id: string, medium: number | null) {
+  chosen.value = id
+  chosenMedium.value = medium
 }
 
 async function use() {
   // A pasted address names its own service, so it is looked up without one.
   const pasted = reference.value.trim()
-  const reference_ = pasted || chosen.value
+  const target = pasted || chosen.value
   const source = pasted ? null : (selected.value?.sourceId ?? null)
+  const medium = pasted ? undefined : (chosenMedium.value ?? undefined)
 
-  if (reference_ && (await metadata.adopt(reference_, source))) {
+  if (target && (await metadata.adopt(target, source, medium))) {
     emit('close')
   }
 }
@@ -150,77 +134,15 @@ const label = 'w-24 shrink-0 text-[0.625rem] uppercase tracking-[0.14em] text-et
         </p>
 
         <ul class="flex flex-col">
-          <li v-for="result in metadata.results.value" :key="result.id">
-            <div
-              class="flex items-baseline gap-2 border-b border-chassis-800 py-1.5"
-              :class="chosen === result.id && 'text-brass-400'"
-            >
-              <button
-                type="button"
-                class="w-4 shrink-0 text-etch-600 transition-colors hover:text-etch-100 focus-visible:outline-none"
-                :aria-expanded="opened.includes(result.id)"
-                :aria-label="t('search.tracksOf', { title: result.title })"
-                @click="toggleOpen(result.id)"
-              >
-                {{ opened.includes(result.id) ? '⌄' : '›' }}
-              </button>
-
-              <button
-                type="button"
-                class="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-2 text-left focus-visible:outline focus-visible:outline-1 focus-visible:-outline-offset-2 focus-visible:outline-brass-500"
-                @click="chosen = result.id"
-              >
-                <span
-                  class="shrink-0 font-mono text-[0.625rem] uppercase tracking-[0.12em] text-etch-600"
-                >
-                  {{ t('source.' + result.sourceId) }}
-                </span>
-                <span class="text-[0.8125rem] text-etch-100">{{ result.artist }}</span>
-                <span class="text-[0.8125rem] text-etch-400">{{ result.title }}</span>
-                <!-- Discogs does not count tracks until the release is
-                     fetched, so an unknown count is left unsaid. -->
-                <span
-                  v-if="result.mediumTrackCounts.length"
-                  class="font-mono text-[0.6875rem] tabular-nums text-etch-600"
-                >
-                  {{
-                    t(
-                      'metadata.trackCount',
-                      result.mediumTrackCounts.reduce((a, b) => a + b, 0),
-                    )
-                  }}
-                </span>
-                <span
-                  v-for="detail in details(result)"
-                  :key="detail!"
-                  class="text-[0.6875rem] text-etch-600"
-                >
-                  · {{ detail }}
-                </span>
-                <span
-                  v-if="matchesDisc(result)"
-                  class="ml-auto shrink-0 rounded-xs border border-brass-500/40 px-1.5 text-[0.625rem] uppercase tracking-[0.12em] text-brass-400"
-                >
-                  {{ t('metadata.trackMatch') }}
-                </span>
-              </button>
-            </div>
-
-            <ol
-              v-if="opened.includes(result.id)"
-              class="border-b border-chassis-800 py-1 pl-10 text-[0.75rem] text-etch-400"
-            >
-              <li v-if="!result.tracks.length" class="py-0.5 text-etch-600">
-                {{ t('search.tracksHidden') }}
-              </li>
-              <li v-for="entry in result.tracks" :key="entry.number" class="py-0.5">
-                <span class="mr-2 font-mono tabular-nums text-etch-600">
-                  {{ String(entry.number).padStart(2, '0') }}
-                </span>
-                {{ entry.title }}
-              </li>
-            </ol>
-          </li>
+          <SearchResultRow
+            v-for="result in metadata.results.value"
+            :key="result.id"
+            :result="result"
+            :disc-track-count="discTrackCount"
+            :chosen-id="chosen"
+            :chosen-medium="chosenMedium"
+            @choose="choose"
+          />
         </ul>
       </div>
 

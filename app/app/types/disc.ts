@@ -38,6 +38,13 @@ export interface TrackMetadata {
   lengthMs: number | null
 }
 
+export interface Medium {
+  position: number
+  title: string | null
+  format: string | null
+  tracks: TrackMetadata[]
+}
+
 export interface ReleaseCandidate {
   sourceId: SourceId
   /** Set by sources that aggregate other databases rather than curate one. */
@@ -61,6 +68,8 @@ export interface ReleaseCandidate {
   discTotal: number | null
   /** Tracks on each disc of the release; search hits carry no tracks at all. */
   mediumTrackCounts: number[]
+  /** Every disc of the release; empty on a search hit until it is fetched. */
+  media: Medium[]
   coverArt: string | null
   tracks: TrackMetadata[]
 }
