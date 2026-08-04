@@ -17,6 +17,7 @@ use crate::toc::Toc;
 
 pub mod cover;
 pub mod ctdb;
+pub mod discogs;
 pub mod manual;
 pub mod musicbrainz;
 
@@ -29,6 +30,7 @@ pub enum SourceId {
     Manual,
     MusicBrainz,
     Ctdb,
+    Discogs,
     CoverArtArchive,
 }
 
@@ -88,6 +90,21 @@ pub struct ReleaseCandidate {
     pub barcode: Option<String>,
     /// The source's own note telling near-identical pressings apart.
     pub disambiguation: Option<String>,
+    /// Tag fields no identification source reliably provides. They are here
+    /// because they end up in the files, and because the user can fill them in
+    /// even when every database is silent.
+    #[serde(default)]
+    pub genre: Option<String>,
+    #[serde(default)]
+    pub style: Option<String>,
+    #[serde(default)]
+    pub composer: Option<String>,
+    #[serde(default)]
+    pub comment: Option<String>,
+    /// Set when the tracks are by different artists, which changes how most
+    /// players group the album.
+    #[serde(default)]
+    pub compilation: bool,
     /// Which disc of the set this is. The size of the set is unknown until the
     /// release itself is fetched, since a lookup by disc ID only ever returns
     /// the one medium that matched.

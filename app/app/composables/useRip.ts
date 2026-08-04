@@ -1,6 +1,6 @@
 import { Channel, invoke, isTauri } from '@tauri-apps/api/core'
 
-import type { ReleaseCandidate, RipEvent, RipFault } from '~/types/disc'
+import type { ReleaseCandidate, RipEvent, RipFault, TrackStatus } from '~/types/disc'
 
 /**
  * Drives one rip and follows it. Progress arrives on a channel opened for this
@@ -18,6 +18,8 @@ export function useRip() {
   const folder = useState<string | null>('rip-folder', () => null)
   const unreadable = useState('rip-unreadable', () => 0)
   const fault = useState<RipFault | null>('rip-fault', () => null)
+  /** Per track, so the list can show where the rip has got to. */
+  const statuses = useState<Record<number, TrackStatus>>('rip-statuses', () => ({}))
 
   /** Progress within the track being read, as a fraction. */
   const trackShare = computed(() => (sectorCount.value ? sectors.value / sectorCount.value : 0))
@@ -51,7 +53,12 @@ export function useRip() {
     }
   })
 
+  function statusOf(number: number): TrackStatus | null {
+    return statuses.value[number] ?? null
+  }
+
   function reset() {
+    statuses.value = {}
     track.value = null
     position.value = 0
     trackCount.value = 0
@@ -62,18 +69,27 @@ export function useRip() {
     fault.value = null
   }
 
-  async function start(driveId: string, release: ReleaseCandidate | null, driveOffset = 0) {
+  async function start(
+    driveId: string,
+    release: ReleaseCandidate | null,
+    tracks: number[],
+    driveOffset = 0,
+  ) {
     if (!isTauri() || running.value) {
       return
     }
 
     reset()
     running.value = true
+    for (const number of tracks) {
+      statuses.value[number] = 'waiting'
+    }
 
     const channel = new Channel<RipEvent>()
     channel.onmessage = (message) => {
       switch (message.event) {
         case 'started':
+          statuses.value[message.track] = 'reading'
           track.value = message.track
           position.value = message.position
           trackCount.value = message.of
@@ -85,9 +101,11 @@ export function useRip() {
           sectorCount.value = message.of
           break
         case 'finished':
+          statuses.value[message.track] = 'done'
           unreadable.value += message.unreadableSectors
           break
         case 'failed':
+          statuses.value[message.track] = 'failed'
           fault.value = message.reason
           break
         case 'done':
@@ -101,6 +119,7 @@ export function useRip() {
       await invoke('rip_disc', {
         driveId,
         release,
+        tracks,
         options: { driveOffset },
         channel,
       })
@@ -120,6 +139,7 @@ export function useRip() {
 
   return {
     running,
+    statusOf,
     track,
     position,
     trackCount,

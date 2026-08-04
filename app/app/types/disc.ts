@@ -29,7 +29,7 @@ export interface Disc {
   freedbId: string
 }
 
-export type SourceId = 'manual' | 'musicBrainz' | 'ctdb' | 'coverArtArchive'
+export type SourceId = 'manual' | 'musicBrainz' | 'ctdb' | 'discogs' | 'coverArtArchive'
 
 export interface TrackMetadata {
   number: number
@@ -50,6 +50,13 @@ export interface ReleaseCandidate {
   label: string | null
   barcode: string | null
   disambiguation: string | null
+  /** Tag fields no source reliably provides, filled in by hand when empty. */
+  genre: string | null
+  style: string | null
+  composer: string | null
+  comment: string | null
+  /** Tracks by different artists, which changes how players group the album. */
+  compilation: boolean
   discNumber: number
   discTotal: number | null
   /** Tracks on each disc of the release; search hits carry no tracks at all. */
@@ -80,6 +87,8 @@ export type DriveFault =
   | { code: 'notAnAudioDisc'; device: string }
   | { code: 'io'; device: string; operation: string; status: number }
   | { code: 'unreadableToc'; device: string; reason: TocFault }
+
+export type TrackStatus = 'waiting' | 'reading' | 'done' | 'failed'
 
 export type RipFault =
   | { code: 'noSuchTrack'; number: number }

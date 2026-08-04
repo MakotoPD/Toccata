@@ -15,9 +15,10 @@ use tauri::ipc::Channel;
 use tauri::{AppHandle, Manager, State};
 use toccata_core::drive::{self, DriveError, DriveInfo};
 use toccata_core::metadata::cover::Covers;
+use toccata_core::metadata::discogs::Discogs;
 use toccata_core::metadata::manual::Manual;
 use toccata_core::metadata::musicbrainz::MusicBrainz;
-use toccata_core::metadata::{Cascade, LookupReport, MetadataError, ReleaseCandidate};
+use toccata_core::metadata::{Cascade, LookupReport, MetadataError, ReleaseCandidate, SourceId};
 use toccata_core::naming;
 use toccata_core::rip::{self, Options, RipError};
 use toccata_core::toc::Toc;
@@ -32,6 +33,9 @@ struct AppState {
     /// Manual search talks to MusicBrainz directly rather than through the
     /// cascade, which only knows how to answer a table of contents.
     search: MusicBrainz,
+    /// Discogs catalogues physical pressings better than anything else, but it
+    /// cannot be asked about a table of contents, so it only answers searches.
+    discogs: Discogs,
     /// Corrections the user has made, which the cascade also reads from.
     store: Manual,
     /// Raised to ask a rip in progress to stop at the next chunk.
@@ -101,9 +105,21 @@ async fn lookup_metadata(state: State<'_, AppState>) -> Result<LookupReport, Dri
 async fn search_releases(
     artist: String,
     title: String,
+    barcode: String,
     state: State<'_, AppState>,
 ) -> Result<Vec<ReleaseCandidate>, MetadataError> {
-    state.search.search(&artist, &title).await
+    // Both services are asked at once and their answers are shown side by side
+    // with the name of whichever found them. One of them failing is not a
+    // reason to show nothing.
+    let (musicbrainz, discogs) = tokio::join!(
+        state.search.search(&artist, &title, &barcode),
+        state.discogs.search(&artist, &title, &barcode),
+    );
+
+    let mut results = musicbrainz.unwrap_or_default();
+    results.extend(discogs.unwrap_or_default());
+
+    Ok(results)
 }
 
 /// Accepts a release address or a bare identifier, so a disc can be pinned to
@@ -111,9 +127,19 @@ async fn search_releases(
 #[tauri::command]
 async fn fetch_release(
     reference: String,
+    source_id: Option<SourceId>,
     state: State<'_, AppState>,
 ) -> Result<Option<ReleaseCandidate>, MetadataError> {
-    state.search.release(&reference).await
+    // A pasted address names its own service; a chosen result says which list
+    // it came from. Without either, the shape of the identifier decides.
+    match source_id {
+        Some(SourceId::Discogs) => state.discogs.release(&reference).await,
+        Some(SourceId::MusicBrainz) => state.search.release(&reference).await,
+        _ => match state.search.release(&reference).await? {
+            Some(found) => Ok(Some(found)),
+            None => state.discogs.release(&reference).await,
+        },
+    }
 }
 
 /// Keeps a release under the Disc ID of the disc on screen. The identifier is
@@ -159,6 +185,45 @@ async fn fetch_cover(
     state.covers.fetch(&url).await
 }
 
+/// Where a rip of this disc would land. The same function answers the panel
+/// that shows the path and the rip that writes there, so the two cannot drift.
+fn output_folder(
+    app: &AppHandle,
+    toc: &toccata_core::toc::Toc,
+    release: Option<&ReleaseCandidate>,
+) -> PathBuf {
+    let folder = naming::release_folder(
+        release.map_or("", |release| &release.artist),
+        release.map_or("", |release| &release.title),
+        &toc.musicbrainz_disc_id(),
+    );
+
+    app.path()
+        .audio_dir()
+        .unwrap_or_else(|_| PathBuf::from("."))
+        .join("Toccata")
+        .join(folder)
+}
+
+#[tauri::command]
+fn rip_folder(
+    release: Option<ReleaseCandidate>,
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Option<String> {
+    let toc = state
+        .disc
+        .lock()
+        .expect("state lock is never held across a panic")
+        .clone()?;
+
+    Some(
+        output_folder(&app, &toc, release.as_ref())
+            .display()
+            .to_string(),
+    )
+}
+
 /// What the rip reports back while it runs. One channel per rip, rather than a
 /// global event, so two of them could never be told apart.
 #[derive(Clone, Serialize)]
@@ -200,6 +265,8 @@ enum RipEvent {
 async fn rip_disc(
     drive_id: String,
     release: Option<ReleaseCandidate>,
+    // Track numbers to extract; empty means every audio track on the disc.
+    tracks: Vec<u8>,
     options: Options,
     channel: Channel<RipEvent>,
     app: AppHandle,
@@ -215,32 +282,23 @@ async fn rip_disc(
     let cancelled = state.cancelled.clone();
     cancelled.store(false, Ordering::Relaxed);
 
-    let folder = naming::release_folder(
-        release.as_ref().map_or("", |release| &release.artist),
-        release.as_ref().map_or("", |release| &release.title),
-        &toc.musicbrainz_disc_id(),
-    );
-
-    let root = app
-        .path()
-        .audio_dir()
-        .unwrap_or_else(|_| PathBuf::from("."))
-        .join("Toccata")
-        .join(folder);
+    let root = output_folder(&app, &toc, release.as_ref());
 
     tauri::async_runtime::spawn_blocking(move || {
         rip_all(
-            &drive_id, &toc, release, &options, &root, &channel, &cancelled,
+            &drive_id, &toc, release, &tracks, &options, &root, &channel, &cancelled,
         )
     })
     .await
     .map_err(|_| RipError::Write)?
 }
 
+#[allow(clippy::too_many_arguments)]
 fn rip_all(
     drive_id: &str,
     toc: &toccata_core::toc::Toc,
     release: Option<ReleaseCandidate>,
+    wanted: &[u8],
     options: &Options,
     root: &PathBuf,
     channel: &Channel<RipEvent>,
@@ -253,6 +311,7 @@ fn rip_all(
         .tracks
         .iter()
         .filter(|track| track.audio)
+        .filter(|track| wanted.is_empty() || wanted.contains(&track.number))
         .map(|track| track.number)
         .collect();
 
@@ -337,6 +396,7 @@ fn eject(drive_id: String, state: State<'_, AppState>) -> Result<(), DriveError>
 
 fn main() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             let discs = app.path().app_data_dir()?.join("discs");
 
@@ -345,6 +405,7 @@ fn main() {
                 metadata: Cascade::standard(&discs),
                 covers: Covers::default(),
                 search: MusicBrainz::default(),
+                discogs: Discogs::default(),
                 store: Manual::new(discs),
                 cancelled: Arc::new(AtomicBool::new(false)),
             });
@@ -361,6 +422,7 @@ fn main() {
             save_release,
             forget_release,
             rip_disc,
+            rip_folder,
             cancel_rip,
             eject
         ])

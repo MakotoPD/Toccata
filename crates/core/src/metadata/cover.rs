@@ -54,7 +54,7 @@ impl Default for Covers {
 /// The URL reaches this crate by way of a third party database and the frontend,
 /// so it is never handed to the HTTP client unchecked. Each art source added
 /// later brings its own host onto this list.
-const ALLOWED_HOSTS: [&str; 2] = ["coverartarchive.org", "archive.org"];
+const ALLOWED_HOSTS: [&str; 3] = ["coverartarchive.org", "archive.org", "discogs.com"];
 
 fn is_allowed(url: &str) -> bool {
     let Some(rest) = url
@@ -187,6 +187,7 @@ mod tests {
         ));
         assert!(is_allowed("http://coverartarchive.org/release/x/front"));
         assert!(is_allowed("https://dn710309.ca.archive.org/0/items/x.jpg"));
+        assert!(is_allowed("https://i.discogs.com/abc/front.jpeg"));
     }
 
     #[test]

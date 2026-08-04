@@ -32,7 +32,11 @@
     "start": "Start",
     "length": "Length",
     "data": "Data",
-    "preEmphasis": "Pre-emphasis"
+    "preEmphasis": "Pre-emphasis",
+    "status": "Status",
+    "size": "Size",
+    "include": "Rip track {number}",
+    "includeAll": "Rip every track"
   },
   "metadata": {
     "identify": "Identify disc",
@@ -55,7 +59,8 @@
     "musicBrainz": "MusicBrainz",
     "ctdb": "CTDB",
     "coverArtArchive": "Cover Art Archive",
-    "manual": "Entered by hand"
+    "manual": "Entered by hand",
+    "discogs": "Discogs"
   },
   "search": {
     "heading": "Search by hand",
@@ -64,19 +69,23 @@
     "title": "Release",
     "titleHint": "Hello Nasty",
     "submit": "Search",
-    "reference": "Release address or identifier",
+    "reference": "Release address",
     "referenceHint": "https://musicbrainz.org/release/…",
     "use": "Use",
     "notFound": "Nothing was found under that address.",
     "empty": "No release matched.",
-    "found": "{count} release found | {count} releases found"
+    "found": "{count} release found | {count} releases found",
+    "barcode": "Bar code",
+    "byBarcode": "Look up",
+    "tracksOf": "Tracks of {title}",
+    "tracksHidden": "Track names arrive once this release is used."
   },
   "editor": {
     "heading": "Edit by hand",
     "open": "Edit",
     "start": "Enter it by hand",
-    "title": "Release title",
-    "artist": "Release artist",
+    "title": "Album",
+    "artist": "Artist",
     "date": "Date",
     "label": "Label",
     "barcode": "Barcode",
@@ -90,7 +99,15 @@
     "save": "Save",
     "cancel": "Cancel",
     "storedUnder": "Kept under this disc's ID, so the disc is recognised next time.",
-    "forget": "Forget this disc"
+    "forget": "Forget this disc",
+    "genre": "Genre",
+    "style": "Style",
+    "year": "Year",
+    "disc": "Disc",
+    "comment": "Comment",
+    "compilation": "Compilation",
+    "albumArtist": "Album artist",
+    "composer": "Composer"
   },
   "rip": {
     "start": "Rip disc",
@@ -100,7 +117,37 @@
     "done": "Saved to {folder}",
     "perfect": "Every sector read cleanly.",
     "imperfect": "{count} sector was unreadable and came out silent | {count} sectors were unreadable and came out silent",
-    "openFolder": "Where the files went"
+    "openFolder": "Where the files went",
+    "status": {
+      "waiting": "Waiting",
+      "reading": "Reading",
+      "done": "Done",
+      "failed": "Failed"
+    }
+  },
+  "output": {
+    "format": "Rip to",
+    "path": "Path",
+    "pathPending": "read a disc first",
+    "reveal": "Open",
+    "naming": "Naming",
+    "namingScheme": "Artist - Album\\NN - Title"
+  },
+  "panel": {
+    "tags": "Tags",
+    "encoder": "Encoder",
+    "forRelease": "Whole disc",
+    "forTrack": "Track {number}",
+    "hint": "Pick a track in the list to edit that one instead.",
+    "encoderNone": "WAV stores the audio exactly as the disc holds it, so there is nothing to set. Other formats arrive with encoding."
+  },
+  "cover": {
+    "none": "No cover",
+    "choose": "Change"
+  },
+  "menu": {
+    "search": "Find metadata",
+    "label": "More"
   },
   "error": {
     "drive": {

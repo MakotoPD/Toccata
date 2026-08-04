@@ -1,6 +1,6 @@
 import { invoke, isTauri } from '@tauri-apps/api/core'
 
-import type { LookupReport, MetadataFault, ReleaseCandidate } from '~/types/disc'
+import type { LookupReport, MetadataFault, ReleaseCandidate, SourceId } from '~/types/disc'
 
 /**
  * Candidate pressings for the disc on screen. One Disc ID mapping to several
@@ -96,7 +96,7 @@ export function useMetadata() {
    * Searching by hand is a normal way in, not a last resort, so it never waits
    * for the cascade to have failed first.
    */
-  async function search(artist: string, title: string) {
+  async function search(artist: string, title: string, barcode: string) {
     if (!isTauri() || searching.value) {
       return
     }
@@ -105,7 +105,11 @@ export function useMetadata() {
     results.value = []
 
     try {
-      results.value = await invoke<ReleaseCandidate[]>('search_releases', { artist, title })
+      results.value = await invoke<ReleaseCandidate[]>('search_releases', {
+        artist,
+        title,
+        barcode,
+      })
       ranSearch.value = true
     } catch (error) {
       failures.value = [...failures.value, error as MetadataFault]
@@ -118,7 +122,7 @@ export function useMetadata() {
    * Turns a search hit, or a pasted address, into the release in use. Search
    * results carry no tracks, so the full record has to be fetched.
    */
-  async function adopt(reference: string) {
+  async function adopt(reference: string, sourceId: SourceId | null = null) {
     if (!isTauri() || searching.value) {
       return false
     }
@@ -126,7 +130,10 @@ export function useMetadata() {
     searching.value = true
 
     try {
-      const found = await invoke<ReleaseCandidate | null>('fetch_release', { reference })
+      const found = await invoke<ReleaseCandidate | null>('fetch_release', {
+        reference,
+        sourceId,
+      })
       if (!found) {
         return false
       }

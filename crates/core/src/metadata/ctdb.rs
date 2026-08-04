@@ -162,6 +162,11 @@ fn into_candidate(node: roxmltree::Node<'_, '_>) -> ReleaseCandidate {
         label: label.and_then(|node| text(node.attribute("name"))),
         barcode: text(node.attribute("barcode")),
         disambiguation: text(node.attribute("discname")),
+        genre: None,
+        style: None,
+        composer: None,
+        comment: None,
+        compilation: false,
         disc_number: number(node.attribute("discnumber")).unwrap_or(1),
         disc_total: number(node.attribute("disccount")),
         medium_track_counts: vec![

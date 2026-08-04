@@ -87,8 +87,9 @@ impl MusicBrainz {
         &self,
         artist: &str,
         title: &str,
+        barcode: &str,
     ) -> Result<Vec<ReleaseCandidate>, MetadataError> {
-        let query = lucene_query(artist, title);
+        let query = lucene_query(artist, title, barcode);
         if query.is_empty() {
             return Ok(Vec::new());
         }
@@ -173,7 +174,7 @@ pub fn release_id_from(input: &str) -> Option<String> {
 
 /// Builds the Lucene query the search endpoint expects. User input is quoted
 /// and its own quotes escaped, so a stray character cannot rewrite the query.
-fn lucene_query(artist: &str, title: &str) -> String {
+fn lucene_query(artist: &str, title: &str, barcode: &str) -> String {
     fn term(field: &str, value: &str) -> Option<String> {
         let value = value.trim();
         if value.is_empty() {
@@ -182,6 +183,12 @@ fn lucene_query(artist: &str, title: &str) -> String {
 
         let escaped = value.replace('\\', r"\\").replace('"', "\\\"");
         Some(format!("{field}:\"{escaped}\""))
+    }
+
+    // A barcode identifies the physical pressing on its own, so when there is
+    // one it stands alone rather than being narrowed by a guessed spelling.
+    if let Some(barcode) = term("barcode", barcode) {
+        return barcode;
     }
 
     [term("release", title), term("artist", artist)]
@@ -256,6 +263,11 @@ fn into_candidate(release: Release, every_medium: bool) -> ReleaseCandidate {
             .find_map(|info| info.label.as_ref().map(|label| label.name.clone())),
         barcode: release.barcode.filter(|value| !value.is_empty()),
         disambiguation: release.disambiguation.filter(|value| !value.is_empty()),
+        genre: None,
+        style: None,
+        composer: None,
+        comment: None,
+        compilation: false,
         disc_number: medium.map_or(1, |medium| medium.position),
         disc_total: every_medium.then_some(release.media.len() as u32),
         medium_track_counts: release
@@ -481,14 +493,25 @@ mod tests {
     #[test]
     fn quotes_search_terms_so_they_cannot_rewrite_the_query() {
         assert_eq!(
-            lucene_query("Beastie Boys", "Hello Nasty"),
+            lucene_query("Beastie Boys", "Hello Nasty", ""),
             r#"release:"Hello Nasty" AND artist:"Beastie Boys""#
         );
-        assert_eq!(lucene_query("", "Hello Nasty"), r#"release:"Hello Nasty""#);
-        assert_eq!(lucene_query("  ", "  "), "");
         assert_eq!(
-            lucene_query("", r#"a" OR release:"b"#),
+            lucene_query("", "Hello Nasty", ""),
+            r#"release:"Hello Nasty""#
+        );
+        assert_eq!(lucene_query("  ", "  ", " "), "");
+        assert_eq!(
+            lucene_query("", r#"a" OR release:"b"#, ""),
             r#"release:"a\" OR release:\"b""#
+        );
+    }
+
+    #[test]
+    fn a_barcode_identifies_the_pressing_by_itself() {
+        assert_eq!(
+            lucene_query("Beastie Boys", "Hello Nasty", "724349572324"),
+            r#"barcode:"724349572324""#
         );
     }
 

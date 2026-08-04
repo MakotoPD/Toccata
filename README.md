@@ -14,8 +14,8 @@ M4A (both AAC and ALAC variants).
 
 Early development. The application reads the table of contents of an audio CD
 on all three platforms, computes the MusicBrainz and FreeDB disc identifiers,
-and identifies it through MusicBrainz and CUETools DB, with cover art, manual
-search and hand-entered metadata that is remembered per disc. Audio comes off
+and identifies it through MusicBrainz, CUETools DB and Discogs, with cover art,
+search by name or barcode, and hand-entered metadata remembered per disc. Audio comes off
 the disc as WAV, with drive offset correction. Encoding and verification are
 not written yet.
 
@@ -40,6 +40,7 @@ whole is GPL. This rules out a permissive license.
 | serde, serde_json | MIT OR Apache-2.0 |
 | reqwest | MIT OR Apache-2.0 |
 | roxmltree | MIT OR Apache-2.0 |
+| tauri-plugin-opener, @tauri-apps/plugin-opener | Apache-2.0 OR MIT |
 | sha1 | MIT OR Apache-2.0 |
 | thiserror | MIT OR Apache-2.0 |
 | windows (Windows only) | Apache-2.0 OR MIT |

@@ -32,7 +32,11 @@
     "start": "Początek",
     "length": "Długość",
     "data": "Dane",
-    "preEmphasis": "Pre-emfaza"
+    "preEmphasis": "Pre-emfaza",
+    "status": "Stan",
+    "size": "Rozmiar",
+    "include": "Zgraj ścieżkę {number}",
+    "includeAll": "Zgraj wszystkie ścieżki"
   },
   "metadata": {
     "identify": "Rozpoznaj płytę",
@@ -55,7 +59,8 @@
     "musicBrainz": "MusicBrainz",
     "ctdb": "CTDB",
     "coverArtArchive": "Cover Art Archive",
-    "manual": "Wpisane ręcznie"
+    "manual": "Wpisane ręcznie",
+    "discogs": "Discogs"
   },
   "search": {
     "heading": "Szukaj ręcznie",
@@ -64,19 +69,23 @@
     "title": "Wydanie",
     "titleHint": "Hello Nasty",
     "submit": "Szukaj",
-    "reference": "Adres lub identyfikator wydania",
+    "reference": "Adres wydania",
     "referenceHint": "https://musicbrainz.org/release/…",
     "use": "Użyj",
     "notFound": "Pod tym adresem nic nie ma.",
     "empty": "Żadne wydanie nie pasuje.",
-    "found": "Znaleziono {count} wydanie | Znaleziono {count} wydania | Znaleziono {count} wydań"
+    "found": "Znaleziono {count} wydanie | Znaleziono {count} wydania | Znaleziono {count} wydań",
+    "barcode": "Kod kreskowy",
+    "byBarcode": "Szukaj",
+    "tracksOf": "Ścieżki wydania {title}",
+    "tracksHidden": "Nazwy ścieżek dojdą po użyciu tego wydania."
   },
   "editor": {
     "heading": "Edytuj ręcznie",
     "open": "Edytuj",
     "start": "Wpisz ręcznie",
-    "title": "Tytuł wydania",
-    "artist": "Wykonawca wydania",
+    "title": "Album",
+    "artist": "Wykonawca",
     "date": "Data",
     "label": "Wydawca",
     "barcode": "Barcode",
@@ -90,7 +99,15 @@
     "save": "Zapisz",
     "cancel": "Anuluj",
     "storedUnder": "Zapisane pod Disc ID tej płyty, więc następnym razem zostanie rozpoznana od razu.",
-    "forget": "Zapomnij tę płytę"
+    "forget": "Zapomnij tę płytę",
+    "genre": "Gatunek",
+    "style": "Styl",
+    "year": "Rok",
+    "disc": "Płyta",
+    "comment": "Komentarz",
+    "compilation": "Składanka",
+    "albumArtist": "Wykonawca albumu",
+    "composer": "Kompozytor"
   },
   "rip": {
     "start": "Zgraj płytę",
@@ -100,7 +117,37 @@
     "done": "Zapisano w {folder}",
     "perfect": "Każdy sektor odczytany bez błędu.",
     "imperfect": "{count} sektor był nieczytelny i wyszedł jako cisza | {count} sektory były nieczytelne i wyszły jako cisza | {count} sektorów było nieczytelnych i wyszło jako cisza",
-    "openFolder": "Gdzie trafiły pliki"
+    "openFolder": "Gdzie trafiły pliki",
+    "status": {
+      "waiting": "Czeka",
+      "reading": "Odczyt",
+      "done": "Gotowe",
+      "failed": "Błąd"
+    }
+  },
+  "output": {
+    "format": "Zgraj do",
+    "path": "Ścieżka",
+    "pathPending": "najpierw odczytaj płytę",
+    "reveal": "Otwórz",
+    "naming": "Nazewnictwo",
+    "namingScheme": "Wykonawca - Album\\NN - Tytuł"
+  },
+  "panel": {
+    "tags": "Tagi",
+    "encoder": "Enkoder",
+    "forRelease": "Cała płyta",
+    "forTrack": "Ścieżka {number}",
+    "hint": "Zaznacz ścieżkę na liście, żeby edytować ją osobno.",
+    "encoderNone": "WAV zapisuje dźwięk dokładnie tak, jak leży na płycie, więc nie ma czego ustawiać. Pozostałe formaty dojdą razem z enkodowaniem."
+  },
+  "cover": {
+    "none": "Brak okładki",
+    "choose": "Zmień"
+  },
+  "menu": {
+    "search": "Znajdź metadane",
+    "label": "Więcej"
   },
   "error": {
     "drive": {
