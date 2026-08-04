@@ -5,6 +5,7 @@ mod base64;
 pub mod discid;
 pub mod drive;
 pub mod metadata;
+pub mod rip;
 pub mod toc;
 
 /// Version of the ripping core, reported to the UI.

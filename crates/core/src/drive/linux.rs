@@ -5,12 +5,13 @@ use std::fs;
 use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
 use std::path::Path;
 
-use super::{Drive, DriveError, DriveInfo};
+use super::{BYTES_PER_SECTOR, Drive, DriveError, DriveInfo};
 use crate::toc::{Toc, TocEntry};
 
 // From linux/cdrom.h.
 const CDROMREADTOCHDR: libc::c_ulong = 0x5305;
 const CDROMREADTOCENTRY: libc::c_ulong = 0x5306;
+const CDROMREADAUDIO: libc::c_ulong = 0x530e;
 const CDROMEJECT: libc::c_ulong = 0x5309;
 const CDROM_DRIVE_STATUS: libc::c_ulong = 0x5326;
 
@@ -22,11 +23,24 @@ const CDS_NO_DISC: libc::c_int = 1;
 const CDS_TRAY_OPEN: libc::c_int = 2;
 const CDS_DRIVE_NOT_READY: libc::c_int = 3;
 
+/// One second of audio, which is as much as the driver accepts per call.
+const MAX_FRAMES_PER_READ: u32 = 75;
+
 #[repr(C)]
 #[derive(Default)]
 struct TocHeader {
     first_track: u8,
     last_track: u8,
+}
+
+#[repr(C)]
+struct ReadAudio {
+    /// The union in the header is a three byte M:S:F or a four byte sector
+    /// address; only the latter is ever asked for here.
+    address: i32,
+    address_format: u8,
+    frames: libc::c_int,
+    buffer: *mut u8,
 }
 
 #[repr(C)]
@@ -136,6 +150,38 @@ impl Drive for LinuxDrive {
             device: self.info.id.clone(),
             reason,
         })
+    }
+
+    fn read_audio(&mut self, start: u32, sectors: u32, into: &mut [u8]) -> Result<(), DriveError> {
+        debug_assert!(into.len() >= sectors as usize * BYTES_PER_SECTOR);
+
+        // The driver refuses more than a second of audio in one call, so a
+        // longer request is split rather than failing.
+        let mut done = 0;
+        while done < sectors {
+            let batch = (sectors - done).min(MAX_FRAMES_PER_READ);
+            let offset = done as usize * BYTES_PER_SECTOR;
+
+            let mut request = ReadAudio {
+                address: (start + done) as i32,
+                address_format: CDROM_LBA,
+                frames: batch as libc::c_int,
+                buffer: into[offset..].as_mut_ptr(),
+            };
+
+            if unsafe { libc::ioctl(self.fd.as_raw_fd(), CDROMREADAUDIO, &raw mut request) } < 0 {
+                return Err(DriveError::UnreadableAudio {
+                    device: self.info.id.clone(),
+                    start: start + done,
+                    sectors: batch,
+                    status: std::io::Error::last_os_error().raw_os_error().unwrap_or(0),
+                });
+            }
+
+            done += batch;
+        }
+
+        Ok(())
     }
 
     fn eject(&mut self) -> Result<(), DriveError> {

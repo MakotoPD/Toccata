@@ -12,7 +12,7 @@
 use std::ffi::{CStr, CString, c_char, c_void};
 use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
 
-use super::{Drive, DriveError, DriveInfo};
+use super::{BYTES_PER_SECTOR, Drive, DriveError, DriveInfo};
 use crate::toc::{Toc, TocEntry};
 
 /// Full TOC, the only format that reports the lead-out position.
@@ -26,6 +26,10 @@ const POINT_LEAD_OUT: u8 = 0xa2;
 const ADR_POSITION: u8 = 1;
 
 const TOC_BUFFER_LEN: usize = 2048;
+
+/// Only the user data of an audio sector, which is all 2352 bytes of it.
+const SECTOR_AREA_USER: u8 = 0x10;
+const SECTOR_TYPE_CDDA: u8 = 0x01;
 
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
@@ -65,6 +69,17 @@ struct TocHeader {
 }
 
 #[repr(C)]
+struct ReadRequest {
+    /// A byte offset, so sector addresses are scaled by the audio sector size.
+    offset: u64,
+    sector_area: u8,
+    sector_type: u8,
+    reserved_0080: [u8; 10],
+    buffer_length: u32,
+    buffer: *mut c_void,
+}
+
+#[repr(C)]
 struct ReadTocRequest {
     format: u8,
     format_as_time: u8,
@@ -87,6 +102,7 @@ const fn iowr(group: u8, number: u8, size: usize) -> libc::c_ulong {
         | number as libc::c_ulong
 }
 
+const DKIOCCDREAD: libc::c_ulong = iowr(b'd', 96, size_of::<ReadRequest>());
 const DKIOCCDREADTOC: libc::c_ulong = iowr(b'd', 100, size_of::<ReadTocRequest>());
 const DKIOCEJECT: libc::c_ulong = iowr(b'd', 21, 0);
 
@@ -152,6 +168,33 @@ impl Drive for MacosDrive {
         }
 
         parse_toc(&self.info.id, &buffer[..usize::from(request.buffer_length)])
+    }
+
+    fn read_audio(&mut self, start: u32, sectors: u32, into: &mut [u8]) -> Result<(), DriveError> {
+        let wanted = sectors as usize * BYTES_PER_SECTOR;
+        debug_assert!(into.len() >= wanted);
+
+        let mut request = ReadRequest {
+            offset: u64::from(start) * BYTES_PER_SECTOR as u64,
+            sector_area: SECTOR_AREA_USER,
+            sector_type: SECTOR_TYPE_CDDA,
+            reserved_0080: [0; 10],
+            buffer_length: wanted as u32,
+            buffer: into.as_mut_ptr().cast(),
+        };
+
+        let failed = unsafe { libc::ioctl(self.fd.as_raw_fd(), DKIOCCDREAD, &raw mut request) } < 0;
+
+        if failed || request.buffer_length as usize != wanted {
+            return Err(DriveError::UnreadableAudio {
+                device: self.info.id.clone(),
+                start,
+                sectors,
+                status: std::io::Error::last_os_error().raw_os_error().unwrap_or(0),
+            });
+        }
+
+        Ok(())
     }
 
     fn eject(&mut self) -> Result<(), DriveError> {

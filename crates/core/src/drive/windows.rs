@@ -4,7 +4,8 @@ use std::ffi::c_void;
 use std::mem::size_of;
 
 use windows::Win32::Devices::Cdrom::{
-    CDROM_READ_TOC_EX, CDROM_TOC, IOCTL_CDROM_READ_TOC_EX, TRACK_DATA,
+    CDDA, CDROM_READ_TOC_EX, CDROM_TOC, IOCTL_CDROM_RAW_READ, IOCTL_CDROM_READ_TOC_EX,
+    RAW_READ_INFO, TRACK_DATA,
 };
 use windows::Win32::Foundation::{CloseHandle, ERROR_ACCESS_DENIED, ERROR_NOT_READY, HANDLE};
 use windows::Win32::Storage::FileSystem::{
@@ -16,11 +17,20 @@ use windows::Win32::System::Ioctl::IOCTL_STORAGE_EJECT_MEDIA;
 use windows::Win32::System::WindowsProgramming::DRIVE_CDROM;
 use windows::core::PCWSTR;
 
-use super::{Drive, DriveError, DriveInfo};
+use super::{BYTES_PER_SECTOR, Drive, DriveError, DriveInfo};
 use crate::toc::{Toc, TocEntry};
 
 /// Track number the TOC uses for the lead-out entry.
 const LEAD_OUT_TRACK: u8 = 0xaa;
+
+/// Data sector size, which is what the raw read request counts its offset in
+/// even though the sectors it returns are 2352 byte audio ones.
+const COOKED_SECTOR_SIZE: i64 = 2048;
+
+/// One transfer may not exceed 64 KiB, and 2352 goes into that 27 times.
+/// Asking for 28 fails outright with an invalid parameter rather than a short
+/// read, so requests are split here instead.
+const MAX_SECTORS_PER_READ: u32 = 27;
 
 pub fn list() -> Vec<DriveInfo> {
     let mask = unsafe { GetLogicalDrives() };
@@ -105,6 +115,55 @@ impl Drive for WindowsDrive {
         .map_err(|error| map_error(&self.info.id, "IOCTL_CDROM_READ_TOC_EX", &error))?;
 
         parse_toc(&self.info.id, &raw)
+    }
+
+    fn read_audio(&mut self, start: u32, sectors: u32, into: &mut [u8]) -> Result<(), DriveError> {
+        debug_assert!(into.len() >= sectors as usize * BYTES_PER_SECTOR);
+
+        let mut done = 0;
+        while done < sectors {
+            let batch = (sectors - done).min(MAX_SECTORS_PER_READ);
+            let wanted = batch as usize * BYTES_PER_SECTOR;
+            let offset = done as usize * BYTES_PER_SECTOR;
+
+            let request = RAW_READ_INFO {
+                // Counted in cooked sectors even when reading raw audio, which
+                // is the one surprising thing about this call.
+                DiskOffset: i64::from(start + done) * COOKED_SECTOR_SIZE,
+                SectorCount: batch,
+                TrackMode: CDDA,
+            };
+
+            let mut returned = 0u32;
+            let failed = |status| DriveError::UnreadableAudio {
+                device: self.info.id.clone(),
+                start: start + done,
+                sectors: batch,
+                status,
+            };
+
+            unsafe {
+                DeviceIoControl(
+                    self.handle,
+                    IOCTL_CDROM_RAW_READ,
+                    Some(&request as *const _ as *const c_void),
+                    size_of::<RAW_READ_INFO>() as u32,
+                    Some(into[offset..].as_mut_ptr().cast()),
+                    wanted as u32,
+                    Some(&mut returned),
+                    None,
+                )
+            }
+            .map_err(|error| failed(error.code().0 & 0xffff))?;
+
+            if returned as usize != wanted {
+                return Err(failed(0));
+            }
+
+            done += batch;
+        }
+
+        Ok(())
     }
 
     fn eject(&mut self) -> Result<(), DriveError> {
