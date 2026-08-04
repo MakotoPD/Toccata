@@ -52,6 +52,8 @@ export interface ReleaseCandidate {
   disambiguation: string | null
   discNumber: number
   discTotal: number | null
+  /** Tracks on each disc of the release; search hits carry no tracks at all. */
+  mediumTrackCounts: number[]
   coverArt: string | null
   tracks: TrackMetadata[]
 }

@@ -48,12 +48,27 @@
     "trackCount": "{count} ścieżka | {count} ścieżki | {count} ścieżek",
     "unknownField": "nieznane",
     "relayedFrom": "przez {source}",
-    "coverOf": "Okładka albumu {title}"
+    "coverOf": "Okładka albumu {title}",
+    "discCount": "{count} płyta | {count} płyty | {count} płyt"
   },
   "source": {
     "musicBrainz": "MusicBrainz",
     "ctdb": "CTDB",
     "coverArtArchive": "Cover Art Archive"
+  },
+  "search": {
+    "heading": "Szukaj ręcznie",
+    "artist": "Wykonawca",
+    "artistHint": "Beastie Boys",
+    "title": "Wydanie",
+    "titleHint": "Hello Nasty",
+    "submit": "Szukaj",
+    "reference": "Adres lub identyfikator wydania",
+    "referenceHint": "https://musicbrainz.org/release/…",
+    "use": "Użyj",
+    "notFound": "Pod tym adresem nic nie ma.",
+    "empty": "Żadne wydanie nie pasuje.",
+    "found": "Znaleziono {count} wydanie | Znaleziono {count} wydania | Znaleziono {count} wydań"
   },
   "error": {
     "drive": {

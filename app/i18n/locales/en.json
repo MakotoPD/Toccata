@@ -48,12 +48,27 @@
     "trackCount": "{count} track | {count} tracks",
     "unknownField": "unknown",
     "relayedFrom": "via {source}",
-    "coverOf": "Cover of {title}"
+    "coverOf": "Cover of {title}",
+    "discCount": "{count} disc | {count} discs"
   },
   "source": {
     "musicBrainz": "MusicBrainz",
     "ctdb": "CTDB",
     "coverArtArchive": "Cover Art Archive"
+  },
+  "search": {
+    "heading": "Search by hand",
+    "artist": "Artist",
+    "artistHint": "Beastie Boys",
+    "title": "Release",
+    "titleHint": "Hello Nasty",
+    "submit": "Search",
+    "reference": "Release address or identifier",
+    "referenceHint": "https://musicbrainz.org/release/…",
+    "use": "Use",
+    "notFound": "Nothing was found under that address.",
+    "empty": "No release matched.",
+    "found": "{count} release found | {count} releases found"
   },
   "error": {
     "drive": {

@@ -157,6 +157,11 @@ fn into_candidate(node: roxmltree::Node<'_, '_>) -> ReleaseCandidate {
         disambiguation: text(node.attribute("discname")),
         disc_number: number(node.attribute("discnumber")).unwrap_or(1),
         disc_total: number(node.attribute("disccount")),
+        medium_track_counts: vec![
+            node.children()
+                .filter(|child| child.has_tag_name((NAMESPACE, "track")))
+                .count() as u32,
+        ],
         cover_art: coverart.and_then(|node| text(node.attribute("uri"))),
         tracks: node
             .children()

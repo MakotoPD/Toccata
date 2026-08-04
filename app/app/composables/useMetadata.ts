@@ -11,9 +11,13 @@ export function useMetadata() {
   const { t } = useI18n()
 
   const candidates = useState<ReleaseCandidate[]>('metadata-candidates', () => [])
+  /** Hits from a search the user ran, kept apart from what the cascade found. */
+  const results = useState<ReleaseCandidate[]>('metadata-results', () => [])
   const failures = useState<MetadataFault[]>('metadata-failures', () => [])
   const selectedId = useState<string | null>('metadata-selected', () => null)
   const searching = useState('metadata-searching', () => false)
+  /** Whether a manual search has been run, so an empty list means something. */
+  const ranSearch = useState('metadata-ran-search', () => false)
   const searched = useState('metadata-searched', () => false)
   /** Data URI for the chosen release, fetched by the backend. */
   const cover = useState<string | null>('metadata-cover', () => null)
@@ -35,9 +39,11 @@ export function useMetadata() {
 
   function reset() {
     candidates.value = []
+    results.value = []
     failures.value = []
     selectedId.value = null
     searched.value = false
+    ranSearch.value = false
     cover.value = null
   }
 
@@ -48,6 +54,7 @@ export function useMetadata() {
 
     searching.value = true
     candidates.value = []
+    results.value = []
     failures.value = []
     selectedId.value = null
     cover.value = null
@@ -85,8 +92,62 @@ export function useMetadata() {
     }
   }
 
+  /**
+   * Searching by hand is a normal way in, not a last resort, so it never waits
+   * for the cascade to have failed first.
+   */
+  async function search(artist: string, title: string) {
+    if (!isTauri() || searching.value) {
+      return
+    }
+
+    searching.value = true
+    results.value = []
+
+    try {
+      results.value = await invoke<ReleaseCandidate[]>('search_releases', { artist, title })
+      ranSearch.value = true
+    } catch (error) {
+      failures.value = [...failures.value, error as MetadataFault]
+    } finally {
+      searching.value = false
+    }
+  }
+
+  /**
+   * Turns a search hit, or a pasted address, into the release in use. Search
+   * results carry no tracks, so the full record has to be fetched.
+   */
+  async function adopt(reference: string) {
+    if (!isTauri() || searching.value) {
+      return false
+    }
+
+    searching.value = true
+
+    try {
+      const found = await invoke<ReleaseCandidate | null>('fetch_release', { reference })
+      if (!found) {
+        return false
+      }
+
+      candidates.value = [found]
+      results.value = []
+      searched.value = true
+      await select(found.id)
+      return true
+    } catch (error) {
+      failures.value = [...failures.value, error as MetadataFault]
+      return false
+    } finally {
+      searching.value = false
+    }
+  }
+
   return {
     candidates,
+    results,
+    ranSearch,
     failures,
     failureMessages,
     selectedId,
@@ -97,5 +158,7 @@ export function useMetadata() {
     lookup,
     reset,
     select,
+    search,
+    adopt,
   }
 }

@@ -89,6 +89,10 @@ pub struct ReleaseCandidate {
     /// the one medium that matched.
     pub disc_number: u32,
     pub disc_total: Option<u32>,
+    /// Tracks on each disc of the release. Searching does not return the
+    /// tracks themselves, so this is what a search hit can be compared with
+    /// the table of contents on.
+    pub medium_track_counts: Vec<u32>,
     /// Cover art the source already knows about, ready to use before the
     /// dedicated art sources are consulted.
     pub cover_art: Option<String>,
@@ -150,6 +154,10 @@ impl Cascade {
 
 impl Default for Cascade {
     fn default() -> Self {
+        // GnuDB, the freedb successor, is deliberately absent. It only answers
+        // clients whose name is on a list it keeps, and the data it holds
+        // reaches us through CTDB anyway, tagged `freedb` and carrying the
+        // fields a bare CDDB record does not have.
         Self::new(vec![
             Box::new(musicbrainz::MusicBrainz::default()),
             // CTDB replicates MusicBrainz, Discogs and freedb and matches on a

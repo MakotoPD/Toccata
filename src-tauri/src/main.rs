@@ -9,7 +9,8 @@ use serde::Serialize;
 use tauri::{Manager, State};
 use toccata_core::drive::{self, DriveError, DriveInfo};
 use toccata_core::metadata::cover::Covers;
-use toccata_core::metadata::{Cascade, LookupReport, MetadataError};
+use toccata_core::metadata::musicbrainz::MusicBrainz;
+use toccata_core::metadata::{Cascade, LookupReport, MetadataError, ReleaseCandidate};
 use toccata_core::toc::Toc;
 
 /// The disc currently on screen, plus the metadata sources. Keeping the TOC
@@ -19,6 +20,9 @@ struct AppState {
     disc: Mutex<Option<Toc>>,
     metadata: Cascade,
     covers: Covers,
+    /// Manual search talks to MusicBrainz directly rather than through the
+    /// cascade, which only knows how to answer a table of contents.
+    search: MusicBrainz,
 }
 
 /// What the UI needs to describe the disc currently in a drive. The
@@ -78,6 +82,27 @@ async fn lookup_metadata(state: State<'_, AppState>) -> Result<LookupReport, Dri
     Ok(state.metadata.lookup(&toc).await)
 }
 
+/// Free text search, always available rather than only after the cascade has
+/// failed. Hits carry no tracks; `fetch_release` fills one in once chosen.
+#[tauri::command]
+async fn search_releases(
+    artist: String,
+    title: String,
+    state: State<'_, AppState>,
+) -> Result<Vec<ReleaseCandidate>, MetadataError> {
+    state.search.search(&artist, &title).await
+}
+
+/// Accepts a release address or a bare identifier, so a disc can be pinned to
+/// a pressing the user already found by other means.
+#[tauri::command]
+async fn fetch_release(
+    reference: String,
+    state: State<'_, AppState>,
+) -> Result<Option<ReleaseCandidate>, MetadataError> {
+    state.search.release(&reference).await
+}
+
 /// The address comes from whichever database answered, so the fetch itself
 /// decides whether that host may be contacted at all.
 #[tauri::command]
@@ -105,6 +130,7 @@ fn main() {
                 disc: Mutex::new(None),
                 metadata: Cascade::default(),
                 covers: Covers::default(),
+                search: MusicBrainz::default(),
             });
             Ok(())
         })
@@ -113,6 +139,8 @@ fn main() {
             list_drives,
             read_disc,
             lookup_metadata,
+            search_releases,
+            fetch_release,
             fetch_cover,
             eject
         ])

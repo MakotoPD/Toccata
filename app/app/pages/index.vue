@@ -165,21 +165,34 @@ onMounted(async () => {
           </div>
         </dl>
 
-        <ReleasePicker
-          v-if="metadata.candidates.value.length > 1"
-          class="mb-8"
-          :candidates="metadata.candidates.value"
-          :selected-id="metadata.selectedId.value"
-          :disc-track-count="disc.toc.tracks.length"
-          @select="metadata.select"
-        />
+        <template v-if="metadata.candidates.value.length > 1">
+          <p class="mb-4 text-sm text-etch-400">{{ t('metadata.choose') }}</p>
+
+          <ReleasePicker
+            class="mb-8"
+            :candidates="metadata.candidates.value"
+            :selected-id="metadata.selectedId.value"
+            :disc-track-count="disc.toc.tracks.length"
+            @select="metadata.select"
+          />
+        </template>
 
         <p
           v-else-if="metadata.searched.value && metadata.candidates.value.length === 0"
-          class="mb-8 text-xs uppercase tracking-[0.2em] text-etch-600"
+          class="mb-4 text-xs uppercase tracking-[0.2em] text-etch-600"
         >
           {{ t('metadata.none') }}
         </p>
+
+        <ReleaseSearch
+          class="mb-8"
+          :results="metadata.results.value"
+          :disc-track-count="disc.toc.tracks.length"
+          :busy="metadata.searching.value"
+          :searched="metadata.ranSearch.value"
+          @search="metadata.search"
+          @adopt="metadata.adopt"
+        />
 
         <ul v-if="metadata.failureMessages.value.length" class="mb-8 flex flex-col gap-2">
           <li

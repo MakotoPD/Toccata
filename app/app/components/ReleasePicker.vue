@@ -12,9 +12,17 @@ const emit = defineEmits<{ select: [id: string] }>()
 
 const { t } = useI18n()
 
-/** The strongest hint available before the user knows the answer. */
+/**
+ * The strongest hint available before the user knows the answer. Search hits
+ * carry no tracks, so the comparison goes through the per-disc counts, which
+ * every candidate has.
+ */
 function matchesDisc(candidate: ReleaseCandidate) {
-  return candidate.tracks.length === props.discTrackCount
+  return candidate.mediumTrackCounts.includes(props.discTrackCount)
+}
+
+function trackTotal(candidate: ReleaseCandidate) {
+  return candidate.mediumTrackCounts.reduce((total, count) => total + count, 0)
 }
 
 function details(candidate: ReleaseCandidate) {
@@ -35,10 +43,6 @@ function details(candidate: ReleaseCandidate) {
 
 <template>
   <section>
-    <p v-if="candidates.length > 1" class="mb-4 text-sm text-etch-400">
-      {{ t('metadata.choose') }}
-    </p>
-
     <ul class="flex flex-col gap-2">
       <li v-for="candidate in candidates" :key="candidate.id">
         <button
@@ -68,8 +72,14 @@ function details(candidate: ReleaseCandidate) {
             </span>
             <span aria-hidden="true">·</span>
             <span class="font-mono tabular-nums">
-              {{ t('metadata.trackCount', candidate.tracks.length) }}
+              {{ t('metadata.trackCount', trackTotal(candidate)) }}
             </span>
+            <template v-if="candidate.mediumTrackCounts.length > 1">
+              <span aria-hidden="true">·</span>
+              <span class="font-mono tabular-nums">
+                {{ t('metadata.discCount', candidate.mediumTrackCounts.length) }}
+              </span>
+            </template>
             <template v-for="detail in details(candidate)" :key="detail">
               <span aria-hidden="true">·</span>
               <span>{{ detail }}</span>
