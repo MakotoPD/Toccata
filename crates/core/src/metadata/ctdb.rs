@@ -114,6 +114,13 @@ fn parse(body: &str) -> Result<Vec<ReleaseCandidate>, MetadataError> {
     {
         let candidate = into_candidate(node);
 
+        // A bare `<metadata />` means the service has an entry for the disc but
+        // nothing to say about it. Passing that on would end the cascade with a
+        // release that has no title, no artist and no tracks.
+        if candidate.title.is_empty() && candidate.tracks.is_empty() {
+            continue;
+        }
+
         let fingerprint = (
             candidate.title.clone(),
             candidate.artist.clone(),
@@ -269,6 +276,18 @@ mod tests {
 
         let toc = Toc::from_entries(&entries, 303602 - LEAD_IN_FRAMES).unwrap();
         assert_eq!(toc_parameter(&toc), "0:9550:25737:303452");
+    }
+
+    // Exactly what the service sends for a disc it has an entry for but knows
+    // nothing about.
+    #[test]
+    fn an_empty_metadata_block_is_not_a_candidate() {
+        let body = r#"<ctdb xmlns="http://db.cuetools.net/ns/mmd-1.0#">
+          <entry confidence="2" crc32="0" id="1" />
+          <metadata />
+        </ctdb>"#;
+
+        assert!(parse(body).unwrap().is_empty());
     }
 
     #[test]

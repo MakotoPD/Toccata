@@ -54,7 +54,8 @@
   "source": {
     "musicBrainz": "MusicBrainz",
     "ctdb": "CTDB",
-    "coverArtArchive": "Cover Art Archive"
+    "coverArtArchive": "Cover Art Archive",
+    "manual": "Entered by hand"
   },
   "search": {
     "heading": "Search by hand",
@@ -69,6 +70,27 @@
     "notFound": "Nothing was found under that address.",
     "empty": "No release matched.",
     "found": "{count} release found | {count} releases found"
+  },
+  "editor": {
+    "heading": "Edit by hand",
+    "open": "Edit",
+    "start": "Enter it by hand",
+    "title": "Release title",
+    "artist": "Release artist",
+    "date": "Date",
+    "label": "Label",
+    "barcode": "Barcode",
+    "country": "Country",
+    "discNumber": "Disc number",
+    "discTotal": "Discs in set",
+    "disambiguation": "Note",
+    "tracks": "Tracks",
+    "trackTitle": "Title of track {number}",
+    "trackArtist": "Artist of track {number}",
+    "save": "Save",
+    "cancel": "Cancel",
+    "storedUnder": "Kept under this disc's ID, so the disc is recognised next time.",
+    "forget": "Forget this disc"
   },
   "error": {
     "drive": {

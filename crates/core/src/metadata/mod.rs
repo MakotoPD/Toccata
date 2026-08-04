@@ -8,21 +8,25 @@
 //! ripping has to stay possible with no metadata at all.
 
 use std::future::Future;
+use std::path::PathBuf;
 use std::pin::Pin;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::toc::Toc;
 
 pub mod cover;
 pub mod ctdb;
+pub mod manual;
 pub mod musicbrainz;
 
 /// Which database a candidate came from. Shown next to every result, because
 /// two sources disagreeing about the same disc is normal rather than a bug.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum SourceId {
+    /// Typed or corrected by the user, and therefore the last word.
+    Manual,
     MusicBrainz,
     Ctdb,
     CoverArtArchive,
@@ -55,7 +59,7 @@ impl MetadataError {
     }
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TrackMetadata {
     pub number: u8,
@@ -67,7 +71,7 @@ pub struct TrackMetadata {
 
 /// One candidate pressing. Several of these under a single disc ID is the
 /// normal case, so the choice belongs to the user.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ReleaseCandidate {
     pub source_id: SourceId,
@@ -152,13 +156,19 @@ impl Cascade {
     }
 }
 
-impl Default for Cascade {
-    fn default() -> Self {
-        // GnuDB, the freedb successor, is deliberately absent. It only answers
-        // clients whose name is on a list it keeps, and the data it holds
-        // reaches us through CTDB anyway, tagged `freedb` and carrying the
-        // fields a bare CDDB record does not have.
+impl Cascade {
+    /// The order sources are consulted in. `manual_root` is the directory
+    /// holding releases the user has already corrected by hand.
+    ///
+    /// GnuDB, the freedb successor, is deliberately absent. It only answers
+    /// clients whose name is on a list it keeps, and the data it holds reaches
+    /// us through CTDB anyway, tagged `freedb` and carrying the fields a bare
+    /// CDDB record does not have.
+    pub fn standard(manual_root: impl Into<PathBuf>) -> Self {
         Self::new(vec![
+            // Somebody who already fixed this disc should not have to do it
+            // again, so their answer is asked for first and wins outright.
+            Box::new(manual::Manual::new(manual_root)),
             Box::new(musicbrainz::MusicBrainz::default()),
             // CTDB replicates MusicBrainz, Discogs and freedb and matches on a
             // fuzzy TOC, so it reaches discs an exact Disc ID misses.

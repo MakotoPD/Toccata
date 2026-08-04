@@ -14,7 +14,9 @@ M4A (both AAC and ALAC variants).
 
 Early development. The application reads the table of contents of an audio CD
 on all three platforms, computes the MusicBrainz and FreeDB disc identifiers,
-and identifies it through MusicBrainz and CUETools DB. Nothing is ripped yet.
+and identifies it through MusicBrainz and CUETools DB, with cover art, manual
+search and hand-entered metadata that is remembered per disc. Nothing is
+ripped yet.
 
 ```bash
 pnpm install && pnpm tauri dev

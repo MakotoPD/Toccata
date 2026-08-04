@@ -144,10 +144,45 @@ export function useMetadata() {
     }
   }
 
+  /**
+   * Stores the release under the Disc ID of whatever is in the drive, so the
+   * same disc is recognised straight away next time. The backend takes the
+   * identifier from the table of contents rather than from here.
+   */
+  async function keep(release: ReleaseCandidate) {
+    if (!isTauri()) {
+      return
+    }
+
+    try {
+      await invoke('save_release', { release })
+      candidates.value = [release]
+      results.value = []
+      searched.value = true
+      await select(release.id)
+    } catch (error) {
+      failures.value = [...failures.value, error as MetadataFault]
+    }
+  }
+
+  async function discard() {
+    if (!isTauri()) {
+      return
+    }
+
+    try {
+      await invoke('forget_release')
+    } catch (error) {
+      failures.value = [...failures.value, error as MetadataFault]
+    }
+  }
+
   return {
     candidates,
     results,
     ranSearch,
+    keep,
+    discard,
     failures,
     failureMessages,
     selectedId,

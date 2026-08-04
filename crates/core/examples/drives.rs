@@ -63,7 +63,10 @@ fn print_toc(toc: &Toc) {
 }
 
 async fn identify(toc: &Toc) {
-    let report = Cascade::default().lookup(toc).await;
+    // Corrections made in the application live under its own data directory;
+    // this scratch path keeps the example from reading them.
+    let store = std::env::temp_dir().join("toccata-example-discs");
+    let report = Cascade::standard(store).lookup(toc).await;
 
     for failure in &report.failures {
         println!("  source failed: {failure}");

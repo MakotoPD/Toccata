@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { invoke, isTauri } from '@tauri-apps/api/core'
 
+import type { ReleaseCandidate } from '~/types/disc'
+
 const { t, locale, locales, setLocale } = useI18n()
 const { fromFrames } = useCdTime()
 const { drives, selectedId, disc, faultMessage, busy, refresh, read, eject, select } = useDisc()
@@ -22,8 +24,27 @@ async function readAndIdentify() {
 }
 
 async function ejectDisc() {
+  editing.value = false
   metadata.reset()
   await eject()
+}
+
+const editing = ref(false)
+
+async function readAndClose() {
+  editing.value = false
+  await readAndIdentify()
+}
+
+async function keepDraft(draft: ReleaseCandidate) {
+  await metadata.keep(draft)
+  editing.value = false
+}
+
+async function forgetDisc() {
+  await metadata.discard()
+  editing.value = false
+  await metadata.lookup()
 }
 
 onMounted(async () => {
@@ -73,7 +94,7 @@ onMounted(async () => {
           type="button"
           class="rounded-xs border border-brass-500 bg-brass-500/10 px-3 py-1.5 text-[0.6875rem] uppercase tracking-[0.16em] text-brass-400 transition-colors hover:bg-brass-500/20 focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-brass-500 disabled:opacity-40"
           :disabled="busy || metadata.searching.value || !selectedId"
-          @click="readAndIdentify"
+          @click="readAndClose"
         >
           {{
             busy
@@ -124,11 +145,36 @@ onMounted(async () => {
             <h2 class="font-display text-2xl text-etch-100">{{ metadata.release.value.title }}</h2>
             <p class="mt-1 text-sm text-etch-400">{{ metadata.release.value.artist }}</p>
             <p class="mt-2 text-[0.625rem] uppercase tracking-[0.18em] text-etch-600">
-              {{ t('metadata.from', { source: t('source.' + metadata.release.value.sourceId) }) }}
+              <!-- The user's own entry names itself; a database gets credited. -->
+              {{
+                metadata.release.value.sourceId === 'manual'
+                  ? t('source.manual')
+                  : t('metadata.from', { source: t('source.' + metadata.release.value.sourceId) })
+              }}
               <span v-if="metadata.release.value.relayedFrom">
                 {{ t('metadata.relayedFrom', { source: metadata.release.value.relayedFrom }) }}
               </span>
             </p>
+          </div>
+
+          <div class="ml-auto flex shrink-0 items-center gap-2">
+            <button
+              v-if="!editing"
+              type="button"
+              class="rounded-xs border border-chassis-700 px-3 py-1.5 text-[0.6875rem] uppercase tracking-[0.16em] text-etch-400 transition-colors hover:border-etch-600 hover:text-etch-100 focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-brass-500"
+              @click="editing = true"
+            >
+              {{ t('editor.open') }}
+            </button>
+
+            <button
+              v-if="metadata.release.value.sourceId === 'manual'"
+              type="button"
+              class="rounded-xs border border-chassis-700 px-3 py-1.5 text-[0.6875rem] uppercase tracking-[0.16em] text-etch-600 transition-colors hover:border-etch-600 hover:text-etch-100 focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-brass-500"
+              @click="forgetDisc"
+            >
+              {{ t('editor.forget') }}
+            </button>
           </div>
         </header>
 
@@ -177,14 +223,35 @@ onMounted(async () => {
           />
         </template>
 
-        <p
+        <div
           v-else-if="metadata.searched.value && metadata.candidates.value.length === 0"
-          class="mb-4 text-xs uppercase tracking-[0.2em] text-etch-600"
+          class="mb-4 flex items-center gap-4"
         >
-          {{ t('metadata.none') }}
-        </p>
+          <p class="text-xs uppercase tracking-[0.2em] text-etch-600">{{ t('metadata.none') }}</p>
+
+          <button
+            v-if="!editing"
+            type="button"
+            class="rounded-xs border border-chassis-700 px-3 py-1.5 text-[0.6875rem] uppercase tracking-[0.16em] text-etch-400 transition-colors hover:border-etch-600 hover:text-etch-100 focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-brass-500"
+            @click="editing = true"
+          >
+            {{ t('editor.start') }}
+          </button>
+        </div>
+
+        <MetadataEditor
+          v-if="editing"
+          class="mb-8"
+          :release="metadata.release.value"
+          :track-count="disc.toc.tracks.length"
+          :disc-id="disc.musicbrainzDiscId"
+          :busy="metadata.searching.value"
+          @save="keepDraft"
+          @cancel="editing = false"
+        />
 
         <ReleaseSearch
+          v-else
           class="mb-8"
           :results="metadata.results.value"
           :disc-track-count="disc.toc.tracks.length"

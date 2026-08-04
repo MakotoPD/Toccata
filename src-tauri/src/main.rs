@@ -9,6 +9,7 @@ use serde::Serialize;
 use tauri::{Manager, State};
 use toccata_core::drive::{self, DriveError, DriveInfo};
 use toccata_core::metadata::cover::Covers;
+use toccata_core::metadata::manual::Manual;
 use toccata_core::metadata::musicbrainz::MusicBrainz;
 use toccata_core::metadata::{Cascade, LookupReport, MetadataError, ReleaseCandidate};
 use toccata_core::toc::Toc;
@@ -23,6 +24,8 @@ struct AppState {
     /// Manual search talks to MusicBrainz directly rather than through the
     /// cascade, which only knows how to answer a table of contents.
     search: MusicBrainz,
+    /// Corrections the user has made, which the cascade also reads from.
+    store: Manual,
 }
 
 /// What the UI needs to describe the disc currently in a drive. The
@@ -103,6 +106,39 @@ async fn fetch_release(
     state.search.release(&reference).await
 }
 
+/// Keeps a release under the Disc ID of the disc on screen. The identifier is
+/// taken from the table of contents the drive reported rather than from the
+/// caller, so a correction can only ever be filed against the right disc.
+#[tauri::command]
+fn save_release(
+    release: ReleaseCandidate,
+    state: State<'_, AppState>,
+) -> Result<(), MetadataError> {
+    let Some(disc_id) = current_disc_id(&state) else {
+        return Ok(());
+    };
+
+    state.store.save(&disc_id, &release)
+}
+
+#[tauri::command]
+fn forget_release(state: State<'_, AppState>) -> Result<(), MetadataError> {
+    let Some(disc_id) = current_disc_id(&state) else {
+        return Ok(());
+    };
+
+    state.store.forget(&disc_id)
+}
+
+fn current_disc_id(state: &State<'_, AppState>) -> Option<String> {
+    state
+        .disc
+        .lock()
+        .expect("state lock is never held across a panic")
+        .as_ref()
+        .map(|toc| toc.musicbrainz_disc_id())
+}
+
 /// The address comes from whichever database answered, so the fetch itself
 /// decides whether that host may be contacted at all.
 #[tauri::command]
@@ -126,11 +162,14 @@ fn eject(drive_id: String, state: State<'_, AppState>) -> Result<(), DriveError>
 fn main() {
     tauri::Builder::default()
         .setup(|app| {
+            let discs = app.path().app_data_dir()?.join("discs");
+
             app.manage(AppState {
                 disc: Mutex::new(None),
-                metadata: Cascade::default(),
+                metadata: Cascade::standard(&discs),
                 covers: Covers::default(),
                 search: MusicBrainz::default(),
+                store: Manual::new(discs),
             });
             Ok(())
         })
@@ -142,6 +181,8 @@ fn main() {
             search_releases,
             fetch_release,
             fetch_cover,
+            save_release,
+            forget_release,
             eject
         ])
         .run(tauri::generate_context!())

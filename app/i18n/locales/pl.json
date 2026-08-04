@@ -54,7 +54,8 @@
   "source": {
     "musicBrainz": "MusicBrainz",
     "ctdb": "CTDB",
-    "coverArtArchive": "Cover Art Archive"
+    "coverArtArchive": "Cover Art Archive",
+    "manual": "Wpisane ręcznie"
   },
   "search": {
     "heading": "Szukaj ręcznie",
@@ -69,6 +70,27 @@
     "notFound": "Pod tym adresem nic nie ma.",
     "empty": "Żadne wydanie nie pasuje.",
     "found": "Znaleziono {count} wydanie | Znaleziono {count} wydania | Znaleziono {count} wydań"
+  },
+  "editor": {
+    "heading": "Edytuj ręcznie",
+    "open": "Edytuj",
+    "start": "Wpisz ręcznie",
+    "title": "Tytuł wydania",
+    "artist": "Wykonawca wydania",
+    "date": "Data",
+    "label": "Wydawca",
+    "barcode": "Barcode",
+    "country": "Kraj",
+    "discNumber": "Numer płyty",
+    "discTotal": "Płyt w wydaniu",
+    "disambiguation": "Uwaga",
+    "tracks": "Ścieżki",
+    "trackTitle": "Tytuł ścieżki {number}",
+    "trackArtist": "Wykonawca ścieżki {number}",
+    "save": "Zapisz",
+    "cancel": "Anuluj",
+    "storedUnder": "Zapisane pod Disc ID tej płyty, więc następnym razem zostanie rozpoznana od razu.",
+    "forget": "Zapomnij tę płytę"
   },
   "error": {
     "drive": {
