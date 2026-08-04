@@ -7,6 +7,7 @@ const { t, locale, locales, setLocale } = useI18n()
 const { fromFrames } = useCdTime()
 const { drives, selectedId, disc, faultMessage, busy, refresh, read, eject, select } = useDisc()
 const metadata = useMetadata()
+const ripping = useRip()
 
 const coreVersion = ref<string | null>(null)
 
@@ -26,13 +27,21 @@ async function readAndIdentify() {
 async function ejectDisc() {
   editing.value = false
   metadata.reset()
+  ripping.reset()
   await eject()
+}
+
+async function ripDisc() {
+  if (selectedId.value) {
+    await ripping.start(selectedId.value, metadata.release.value)
+  }
 }
 
 const editing = ref(false)
 
 async function readAndClose() {
   editing.value = false
+  ripping.reset()
   await readAndIdentify()
 }
 
@@ -107,8 +116,17 @@ onMounted(async () => {
 
         <button
           type="button"
+          class="rounded-xs border border-brass-500 bg-brass-500/10 px-3 py-1.5 text-[0.6875rem] uppercase tracking-[0.16em] text-brass-400 transition-colors hover:bg-brass-500/20 focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-brass-500 disabled:opacity-40"
+          :disabled="busy || ripping.running.value || !disc"
+          @click="ripDisc"
+        >
+          {{ t('rip.start') }}
+        </button>
+
+        <button
+          type="button"
           class="rounded-xs border border-chassis-700 px-3 py-1.5 text-[0.6875rem] uppercase tracking-[0.16em] text-etch-400 transition-colors hover:border-etch-600 hover:text-etch-100 focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-brass-500 disabled:opacity-40"
-          :disabled="busy || !selectedId"
+          :disabled="busy || ripping.running.value || !selectedId"
           @click="ejectDisc"
         >
           {{ t('drive.eject') }}
@@ -133,6 +151,38 @@ onMounted(async () => {
       </p>
 
       <template v-else>
+        <RipProgress
+          v-if="ripping.running.value"
+          class="mb-6"
+          :track="ripping.track.value"
+          :position="ripping.position.value"
+          :track-count="ripping.trackCount.value"
+          :track-share="ripping.trackShare.value"
+          :disc-share="ripping.discShare.value"
+          @cancel="ripping.cancel"
+        />
+
+        <div
+          v-else-if="ripping.folder.value || ripping.faultMessage.value"
+          class="mb-6 rounded-xs border border-chassis-700 border-l-2 bg-chassis-900 px-4 py-3 text-sm"
+          :class="ripping.faultMessage.value ? 'border-l-brass-500' : 'border-l-etch-600'"
+        >
+          <p v-if="ripping.faultMessage.value" class="text-etch-100">
+            {{ ripping.faultMessage.value }}
+          </p>
+
+          <template v-else>
+            <p class="text-etch-100">{{ t('rip.done', { folder: ripping.folder.value }) }}</p>
+            <p class="mt-1 text-xs text-etch-400">
+              {{
+                ripping.unreadable.value
+                  ? t('rip.imperfect', ripping.unreadable.value)
+                  : t('rip.perfect')
+              }}
+            </p>
+          </template>
+        </div>
+
         <header v-if="metadata.release.value" class="mb-6 flex items-start gap-5">
           <img
             v-if="metadata.cover.value"

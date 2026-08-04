@@ -92,6 +92,16 @@
     "storedUnder": "Kept under this disc's ID, so the disc is recognised next time.",
     "forget": "Forget this disc"
   },
+  "rip": {
+    "start": "Rip disc",
+    "running": "Ripping",
+    "cancel": "Stop",
+    "track": "Track {number} of {total}",
+    "done": "Saved to {folder}",
+    "perfect": "Every sector read cleanly.",
+    "imperfect": "{count} sector was unreadable and came out silent | {count} sectors were unreadable and came out silent",
+    "openFolder": "Where the files went"
+  },
   "error": {
     "drive": {
       "notFound": "Drive {device} is no longer available.",
@@ -112,6 +122,13 @@
       "unreachable": "{source} could not be reached.",
       "rejected": "{source} refused the request with status {status}.",
       "unreadable": "{source} sent an answer this version cannot read."
+    },
+    "rip": {
+      "noSuchTrack": "The disc has no track {number}.",
+      "notAudio": "Track {number} holds data, not audio.",
+      "drive": "The drive stopped responding during the rip.",
+      "write": "The extracted audio could not be written to disk.",
+      "cancelled": "The rip was stopped."
     }
   }
 }

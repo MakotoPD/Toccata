@@ -92,6 +92,16 @@
     "storedUnder": "Zapisane pod Disc ID tej płyty, więc następnym razem zostanie rozpoznana od razu.",
     "forget": "Zapomnij tę płytę"
   },
+  "rip": {
+    "start": "Zgraj płytę",
+    "running": "Zgrywanie",
+    "cancel": "Zatrzymaj",
+    "track": "Ścieżka {number} z {total}",
+    "done": "Zapisano w {folder}",
+    "perfect": "Każdy sektor odczytany bez błędu.",
+    "imperfect": "{count} sektor był nieczytelny i wyszedł jako cisza | {count} sektory były nieczytelne i wyszły jako cisza | {count} sektorów było nieczytelnych i wyszło jako cisza",
+    "openFolder": "Gdzie trafiły pliki"
+  },
   "error": {
     "drive": {
       "notFound": "Napęd {device} nie jest już dostępny.",
@@ -112,6 +122,13 @@
       "unreachable": "Nie udało się połączyć z {source}.",
       "rejected": "{source} odrzucił zapytanie ze statusem {status}.",
       "unreadable": "{source} zwrócił odpowiedź, której ta wersja nie potrafi odczytać."
+    },
+    "rip": {
+      "noSuchTrack": "Płyta nie ma ścieżki {number}.",
+      "notAudio": "Ścieżka {number} zawiera dane, nie audio.",
+      "drive": "Napęd przestał odpowiadać w trakcie zgrywania.",
+      "write": "Nie udało się zapisać zgranego audio na dysk.",
+      "cancelled": "Zgrywanie zostało zatrzymane."
     }
   }
 }

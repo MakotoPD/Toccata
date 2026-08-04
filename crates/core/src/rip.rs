@@ -23,7 +23,7 @@ const BYTES_PER_SAMPLE: usize = 4;
 /// driver accepts in a single call.
 const CHUNK_SECTORS: u32 = 75;
 
-#[derive(Debug, thiserror::Error, Serialize)]
+#[derive(Debug, Clone, thiserror::Error, Serialize)]
 #[serde(
     tag = "code",
     rename_all = "camelCase",

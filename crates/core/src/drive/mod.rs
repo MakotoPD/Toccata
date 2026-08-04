@@ -37,7 +37,7 @@ pub struct DriveInfo {
 
 /// Errors carry a code and the values needed to describe what went wrong.
 /// They are never prose: the frontend owns every sentence the user reads.
-#[derive(Debug, thiserror::Error, Serialize)]
+#[derive(Debug, Clone, thiserror::Error, Serialize)]
 #[serde(
     tag = "code",
     rename_all = "camelCase",

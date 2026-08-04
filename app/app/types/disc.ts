@@ -80,3 +80,17 @@ export type DriveFault =
   | { code: 'notAnAudioDisc'; device: string }
   | { code: 'io'; device: string; operation: string; status: number }
   | { code: 'unreadableToc'; device: string; reason: TocFault }
+
+export type RipFault =
+  | { code: 'noSuchTrack'; number: number }
+  | { code: 'notAudio'; number: number }
+  | { code: 'drive' }
+  | { code: 'write' }
+  | { code: 'cancelled' }
+
+export type RipEvent =
+  | { event: 'started'; track: number; position: number; of: number; file: string }
+  | { event: 'progress'; track: number; sectors: number; of: number }
+  | { event: 'finished'; track: number; unreadableSectors: number }
+  | { event: 'failed'; track: number; reason: RipFault }
+  | { event: 'done'; folder: string; tracks: number; unreadableSectors: number }

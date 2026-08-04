@@ -5,6 +5,7 @@ mod base64;
 pub mod discid;
 pub mod drive;
 pub mod metadata;
+pub mod naming;
 pub mod rip;
 pub mod toc;
 
