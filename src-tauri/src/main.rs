@@ -5,10 +5,11 @@
 
 use std::fs;
 use std::io::BufWriter;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::SystemTime;
 
 use serde::Serialize;
 use tauri::ipc::Channel;
@@ -23,6 +24,7 @@ use toccata_core::metadata::{Cascade, LookupReport, MetadataError, ReleaseCandid
 use toccata_core::naming::{self, template};
 use toccata_core::rip::{self, Options, RipError};
 use toccata_core::settings::Settings;
+use toccata_core::tag;
 use toccata_core::toc::Toc;
 
 /// The disc currently on screen, plus the metadata sources. Keeping the TOC
@@ -426,6 +428,10 @@ fn rip_all(
     let mut handle = drive::open(drive_id)?;
     fs::create_dir_all(root).map_err(|_| RipError::Write)?;
 
+    let started = SystemTime::now();
+    let drive_name = handle.info().name.clone();
+    let mut ripped: Vec<tag::RippedTrack> = Vec::new();
+
     let audio: Vec<u8> = toc
         .tracks
         .iter()
@@ -475,6 +481,29 @@ fn rip_all(
         match outcome {
             Ok(extracted) => {
                 unreadable += extracted.unreadable_sectors;
+
+                ripped.push(tag::RippedTrack {
+                    number,
+                    file: file
+                        .file_name()
+                        .map_or_else(String::new, |name| name.to_string_lossy().into_owned()),
+                    title: entry.map(|entry| entry.title.clone()).unwrap_or_default(),
+                    artist: entry
+                        .map(|entry| entry.artist.clone())
+                        .or_else(|| release.as_ref().map(|release| release.artist.clone()))
+                        .unwrap_or_default(),
+                    length: toc
+                        .tracks
+                        .iter()
+                        .find(|track| track.number == number)
+                        .map_or(0, |track| track.length),
+                    pre_emphasis: toc
+                        .tracks
+                        .iter()
+                        .any(|track| track.number == number && track.pre_emphasis),
+                    unreadable_sectors: extracted.unreadable_sectors,
+                });
+
                 let _ = channel.send(RipEvent::Finished {
                     track: number,
                     unreadable_sectors: extracted.unreadable_sectors,
@@ -494,11 +523,73 @@ fn rip_all(
         }
     }
 
+    write_artefacts(
+        toc,
+        release.as_ref(),
+        ripped,
+        root,
+        &drive_name,
+        options,
+        started,
+    )?;
+
     let _ = channel.send(RipEvent::Done {
         folder: root.display().to_string(),
         tracks: audio.len() as u32,
         unreadable_sectors: unreadable,
     });
+
+    Ok(())
+}
+
+/// The cue sheet and the log that describe the album that was just written.
+///
+/// A failure here is reported as a failed rip even though the audio is already
+/// on disk: a folder that has just taken tens of megabytes and then refuses two
+/// kilobytes of text has something wrong with it that the user should hear
+/// about.
+fn write_artefacts(
+    toc: &toccata_core::toc::Toc,
+    release: Option<&ReleaseCandidate>,
+    tracks: Vec<tag::RippedTrack>,
+    root: &Path,
+    drive: &str,
+    options: &Options,
+    started: SystemTime,
+) -> Result<(), RipError> {
+    let album = tag::Album {
+        title: release
+            .map(|release| release.title.clone())
+            .unwrap_or_default(),
+        artist: release
+            .map(|release| release.artist.clone())
+            .unwrap_or_default(),
+        date: release.and_then(|release| release.date.clone()),
+        genre: release.and_then(|release| release.genre.clone()),
+        barcode: release.and_then(|release| release.barcode.clone()),
+        tracks,
+    };
+
+    let disc_id = toc.musicbrainz_disc_id();
+    let freedb_id = toc.freedb_id();
+    let base = naming::release_folder(&album.artist, &album.title, &disc_id);
+
+    fs::write(root.join(format!("{base}.cue")), tag::cue::sheet(&album))
+        .map_err(|_| RipError::Write)?;
+
+    let conditions = tag::log::Conditions {
+        drive,
+        read_offset: options.drive_offset,
+        musicbrainz_disc_id: &disc_id,
+        freedb_id: &freedb_id,
+        started,
+    };
+
+    fs::write(
+        root.join(format!("{base}.log")),
+        tag::log::write(&conditions, &album),
+    )
+    .map_err(|_| RipError::Write)?;
 
     Ok(())
 }

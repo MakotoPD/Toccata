@@ -8,6 +8,7 @@ pub mod metadata;
 pub mod naming;
 pub mod rip;
 pub mod settings;
+pub mod tag;
 pub mod toc;
 
 /// Version of the ripping core, reported to the UI.
