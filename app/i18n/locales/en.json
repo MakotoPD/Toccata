@@ -60,7 +60,9 @@
     "ctdb": "CTDB",
     "coverArtArchive": "Cover Art Archive",
     "manual": "Entered by hand",
-    "discogs": "Discogs"
+    "discogs": "Discogs",
+    "itunes": "iTunes",
+    "deezer": "Deezer"
   },
   "search": {
     "heading": "Search by hand",
@@ -132,7 +134,10 @@
     "pathPending": "read a disc first",
     "reveal": "Open",
     "naming": "Naming",
-    "namingScheme": "Artist - Album\\NN - Title"
+    "root": "Library",
+    "rootDefault": "system music folder",
+    "browse": "Browse",
+    "reset": "Default"
   },
   "panel": {
     "tags": "Tags",
@@ -144,7 +149,11 @@
   },
   "cover": {
     "none": "No cover",
-    "choose": "Change"
+    "choose": "Change",
+    "heading": "Choose cover art",
+    "fromFile": "From file",
+    "images": "Images",
+    "empty": "No cover art found."
   },
   "menu": {
     "search": "Find metadata",

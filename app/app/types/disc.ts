@@ -29,7 +29,8 @@ export interface Disc {
   freedbId: string
 }
 
-export type SourceId = 'manual' | 'musicBrainz' | 'ctdb' | 'discogs' | 'coverArtArchive'
+export type SourceId =
+  'manual' | 'musicBrainz' | 'ctdb' | 'discogs' | 'coverArtArchive' | 'itunes' | 'deezer'
 
 export interface TrackMetadata {
   number: number
@@ -112,3 +113,20 @@ export type RipEvent =
   | { event: 'finished'; track: number; unreadableSectors: number }
   | { event: 'failed'; track: number; reason: RipFault }
   | { event: 'done'; folder: string; tracks: number; unreadableSectors: number }
+
+export interface Artwork {
+  sourceId: SourceId
+  thumbnail: string
+  full: string
+  kind: string | null
+  width: number | null
+  height: number | null
+}
+
+export interface Settings {
+  /** Null means the system music folder, resolved by the backend. */
+  outputRoot: string | null
+  /** Folders and file name together, with `/` between them. */
+  pattern: string
+  driveOffsets: Record<string, number>
+}

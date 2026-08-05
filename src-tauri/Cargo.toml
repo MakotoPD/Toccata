@@ -12,6 +12,7 @@ tauri-build = { version = "2.6.3", features = [] }
 [dependencies]
 serde = { version = "1.0.229", features = ["derive"] }
 tauri = { version = "2.11.5", features = [] }
+tauri-plugin-dialog = "2.7.2"
 tauri-plugin-opener = "2.5.4"
 toccata-core = { path = "../crates/core" }
 tokio = { version = "1.53.1", features = ["macros"] }

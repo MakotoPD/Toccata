@@ -14,13 +14,15 @@ use serde::Serialize;
 use tauri::ipc::Channel;
 use tauri::{AppHandle, Manager, State};
 use toccata_core::drive::{self, DriveError, DriveInfo};
+use toccata_core::metadata::artwork::{Artwork, Artworks, Query as ArtworkQuery};
 use toccata_core::metadata::cover::Covers;
 use toccata_core::metadata::discogs::Discogs;
 use toccata_core::metadata::manual::Manual;
 use toccata_core::metadata::musicbrainz::MusicBrainz;
 use toccata_core::metadata::{Cascade, LookupReport, MetadataError, ReleaseCandidate, SourceId};
-use toccata_core::naming;
+use toccata_core::naming::{self, template};
 use toccata_core::rip::{self, Options, RipError};
+use toccata_core::settings::Settings;
 use toccata_core::toc::Toc;
 
 /// The disc currently on screen, plus the metadata sources. Keeping the TOC
@@ -40,6 +42,10 @@ struct AppState {
     store: Manual,
     /// Raised to ask a rip in progress to stop at the next chunk.
     cancelled: Arc<AtomicBool>,
+    artwork: Artworks,
+    settings: Mutex<Settings>,
+    /// Where the settings live, so saving does not have to ask again.
+    settings_path: PathBuf,
 }
 
 /// What the UI needs to describe the disc currently in a drive. The
@@ -175,6 +181,13 @@ fn current_disc_id(state: &State<'_, AppState>) -> Option<String> {
         .map(|toc| toc.musicbrainz_disc_id())
 }
 
+/// An image the user picked themselves, which is the last resort when no
+/// service has the right cover.
+#[tauri::command]
+fn cover_from_file(path: String) -> Result<Option<String>, MetadataError> {
+    toccata_core::metadata::cover::from_file(std::path::Path::new(&path))
+}
+
 /// The address comes from whichever database answered, so the fetch itself
 /// decides whether that host may be contacted at all.
 #[tauri::command]
@@ -185,24 +198,123 @@ async fn fetch_cover(
     state.covers.fetch(&url).await
 }
 
+#[tauri::command]
+fn get_settings(state: State<'_, AppState>) -> Settings {
+    state
+        .settings
+        .lock()
+        .expect("state lock is never held across a panic")
+        .clone()
+}
+
+#[tauri::command]
+fn set_settings(settings: Settings, state: State<'_, AppState>) -> Result<(), MetadataError> {
+    settings
+        .save(&state.settings_path)
+        .map_err(|_| MetadataError::Unreadable {
+            source_id: SourceId::Manual,
+        })?;
+
+    *state
+        .settings
+        .lock()
+        .expect("state lock is never held across a panic") = settings;
+
+    Ok(())
+}
+
+/// Every placeholder a pattern may use, so the interface never has to keep its
+/// own copy of the list.
+#[tauri::command]
+fn naming_tokens() -> Vec<&'static str> {
+    template::TOKENS.to_vec()
+}
+
+/// Cover art from every service that answers without an account.
+#[tauri::command]
+async fn search_artwork(
+    query: ArtworkQuery,
+    state: State<'_, AppState>,
+) -> Result<Vec<Artwork>, ()> {
+    Ok(state.artwork.search(&query).await)
+}
+
 /// Where a rip of this disc would land. The same function answers the panel
 /// that shows the path and the rip that writes there, so the two cannot drift.
 fn output_folder(
     app: &AppHandle,
+    state: &State<'_, AppState>,
     toc: &toccata_core::toc::Toc,
     release: Option<&ReleaseCandidate>,
 ) -> PathBuf {
-    let folder = naming::release_folder(
-        release.map_or("", |release| &release.artist),
-        release.map_or("", |release| &release.title),
-        &toc.musicbrainz_disc_id(),
-    );
+    let settings = state
+        .settings
+        .lock()
+        .expect("state lock is never held across a panic")
+        .clone();
 
-    app.path()
-        .audio_dir()
-        .unwrap_or_else(|_| PathBuf::from("."))
-        .join("Toccata")
-        .join(folder)
+    // The pattern names folders and the file together, so the folder is
+    // everything the pattern produces except its last component.
+    let mut components = render_pattern(&settings.pattern, toc, release, None);
+    components.pop();
+
+    let root = settings.output_root.unwrap_or_else(|| {
+        app.path()
+            .audio_dir()
+            .unwrap_or_else(|_| PathBuf::from("."))
+    });
+
+    components.iter().fold(root, |path, part| path.join(part))
+}
+
+/// Fills the naming pattern in from the release, for one track or, with no
+/// track given, for the disc as a whole.
+fn render_pattern(
+    pattern: &str,
+    toc: &toccata_core::toc::Toc,
+    release: Option<&ReleaseCandidate>,
+    track: Option<&toccata_core::metadata::TrackMetadata>,
+) -> Vec<String> {
+    let mut values = template::Values::new();
+    let mut put = |key: &str, value: String| {
+        values.insert(key.to_owned(), value);
+    };
+
+    if let Some(release) = release {
+        put("albumartist", release.artist.clone());
+        put("album", release.title.clone());
+        put("year", release.date.clone().unwrap_or_default());
+        put("genre", release.genre.clone().unwrap_or_default());
+        put("label", release.label.clone().unwrap_or_default());
+        put(
+            "catalog",
+            release.disambiguation.clone().unwrap_or_default(),
+        );
+        put("disc", release.disc_number.to_string());
+        put(
+            "disctotal",
+            release
+                .disc_total
+                .map(|total| total.to_string())
+                .unwrap_or_default(),
+        );
+        put("tracktotal", release.tracks.len().to_string());
+        put("artist", release.artist.clone());
+    }
+
+    if let Some(track) = track {
+        put("title", track.title.clone());
+        put("artist", track.artist.clone());
+        put(
+            "track",
+            template::pad(
+                u32::from(track.number),
+                release.map(|r| r.tracks.len() as u32),
+            ),
+        );
+    }
+
+    template::render(pattern, &values, &toc.musicbrainz_disc_id())
 }
 
 #[tauri::command]
@@ -218,7 +330,7 @@ fn rip_folder(
         .clone()?;
 
     Some(
-        output_folder(&app, &toc, release.as_ref())
+        output_folder(&app, &state, &toc, release.as_ref())
             .display()
             .to_string(),
     )
@@ -282,11 +394,17 @@ async fn rip_disc(
     let cancelled = state.cancelled.clone();
     cancelled.store(false, Ordering::Relaxed);
 
-    let root = output_folder(&app, &toc, release.as_ref());
+    let root = output_folder(&app, &state, &toc, release.as_ref());
+    let pattern = state
+        .settings
+        .lock()
+        .expect("state lock is never held across a panic")
+        .pattern
+        .clone();
 
     tauri::async_runtime::spawn_blocking(move || {
         rip_all(
-            &drive_id, &toc, release, &tracks, &options, &root, &channel, &cancelled,
+            &drive_id, &toc, release, &tracks, &options, &root, &pattern, &channel, &cancelled,
         )
     })
     .await
@@ -301,6 +419,7 @@ fn rip_all(
     wanted: &[u8],
     options: &Options,
     root: &PathBuf,
+    pattern: &str,
     channel: &Channel<RipEvent>,
     cancelled: &AtomicBool,
 ) -> Result<(), RipError> {
@@ -318,12 +437,17 @@ fn rip_all(
     let mut unreadable = 0;
 
     for (index, number) in audio.iter().copied().enumerate() {
-        let title = release
+        let entry = release
             .as_ref()
-            .and_then(|release| release.tracks.iter().find(|entry| entry.number == number))
-            .map_or("", |entry| entry.title.as_str());
+            .and_then(|release| release.tracks.iter().find(|entry| entry.number == number));
 
-        let file = root.join(format!("{}.wav", naming::track_file(number, title)));
+        // Only the last component of the pattern names the file; the folders
+        // it produced are already part of `root`.
+        let name = render_pattern(pattern, toc, release.as_ref(), entry)
+            .pop()
+            .unwrap_or_else(|| naming::track_file(number, ""));
+
+        let file = root.join(format!("{name}.wav"));
         let _ = channel.send(RipEvent::Started {
             track: number,
             position: index as u32 + 1,
@@ -397,8 +521,12 @@ fn eject(drive_id: String, state: State<'_, AppState>) -> Result<(), DriveError>
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             let discs = app.path().app_data_dir()?.join("discs");
+
+            let settings_path = app.path().app_data_dir()?.join("settings.json");
+            let settings = Settings::load(&settings_path);
 
             app.manage(AppState {
                 disc: Mutex::new(None),
@@ -408,6 +536,9 @@ fn main() {
                 discogs: Discogs::default(),
                 store: Manual::new(discs),
                 cancelled: Arc::new(AtomicBool::new(false)),
+                artwork: Artworks::default(),
+                settings: Mutex::new(settings),
+                settings_path,
             });
             Ok(())
         })
@@ -419,10 +550,15 @@ fn main() {
             search_releases,
             fetch_release,
             fetch_cover,
+            cover_from_file,
             save_release,
             forget_release,
             rip_disc,
             rip_folder,
+            get_settings,
+            set_settings,
+            naming_tokens,
+            search_artwork,
             cancel_rip,
             eject
         ])

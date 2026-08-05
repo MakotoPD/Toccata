@@ -60,7 +60,9 @@
     "ctdb": "CTDB",
     "coverArtArchive": "Cover Art Archive",
     "manual": "Wpisane ręcznie",
-    "discogs": "Discogs"
+    "discogs": "Discogs",
+    "itunes": "iTunes",
+    "deezer": "Deezer"
   },
   "search": {
     "heading": "Szukaj ręcznie",
@@ -132,7 +134,10 @@
     "pathPending": "najpierw odczytaj płytę",
     "reveal": "Otwórz",
     "naming": "Nazewnictwo",
-    "namingScheme": "Wykonawca - Album\\NN - Tytuł"
+    "root": "Biblioteka",
+    "rootDefault": "systemowy folder muzyki",
+    "browse": "Wybierz",
+    "reset": "Domyślny"
   },
   "panel": {
     "tags": "Tagi",
@@ -144,7 +149,11 @@
   },
   "cover": {
     "none": "Brak okładki",
-    "choose": "Zmień"
+    "choose": "Zmień",
+    "heading": "Wybierz okładkę",
+    "fromFile": "Z pliku",
+    "images": "Obrazy",
+    "empty": "Nie znaleziono żadnej okładki."
   },
   "menu": {
     "search": "Znajdź metadane",

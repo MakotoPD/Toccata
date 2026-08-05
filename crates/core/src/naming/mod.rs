@@ -7,6 +7,8 @@
 //! NAS often enough that a name which only works on the machine that made it is
 //! not worth the trouble.
 
+pub mod template;
+
 /// Longest a single path component may be. Filesystems allow 255, and leaving
 /// room means a long title does not push the extension off the end.
 const MAX_LENGTH: usize = 120;

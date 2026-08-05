@@ -54,7 +54,14 @@ impl Default for Covers {
 /// The URL reaches this crate by way of a third party database and the frontend,
 /// so it is never handed to the HTTP client unchecked. Each art source added
 /// later brings its own host onto this list.
-const ALLOWED_HOSTS: [&str; 3] = ["coverartarchive.org", "archive.org", "discogs.com"];
+const ALLOWED_HOSTS: [&str; 5] = [
+    "coverartarchive.org",
+    "archive.org",
+    "discogs.com",
+    // iTunes and Deezer serve their covers from their own image hosts.
+    "mzstatic.com",
+    "dzcdn.net",
+];
 
 fn is_allowed(url: &str) -> bool {
     let Some(rest) = url
@@ -135,6 +142,30 @@ impl Covers {
     }
 }
 
+/// Reads an image the user picked off their own disk. The bytes are sniffed
+/// the same way a downloaded one is, so a mislabelled file is refused rather
+/// than embedded as something it is not.
+pub fn from_file(path: &std::path::Path) -> Result<Option<String>, MetadataError> {
+    let bytes = std::fs::read(path).map_err(|_| MetadataError::Unreadable {
+        source_id: SourceId::Manual,
+    })?;
+
+    if bytes.len() > SIZE_LIMIT {
+        return Err(MetadataError::Unreadable {
+            source_id: SourceId::Manual,
+        });
+    }
+
+    let Some(mime) = image_type(&bytes) else {
+        return Ok(None);
+    };
+
+    Ok(Some(format!(
+        "data:{mime};base64,{}",
+        base64::encode(&bytes, base64::STANDARD, '=')
+    )))
+}
+
 /// Sniffs the format from the leading bytes instead of trusting the header a
 /// redirect chain happened to end on.
 fn image_type(bytes: &[u8]) -> Option<&'static str> {
@@ -188,6 +219,12 @@ mod tests {
         assert!(is_allowed("http://coverartarchive.org/release/x/front"));
         assert!(is_allowed("https://dn710309.ca.archive.org/0/items/x.jpg"));
         assert!(is_allowed("https://i.discogs.com/abc/front.jpeg"));
+        assert!(is_allowed(
+            "https://is1-ssl.mzstatic.com/image/thumb/x/1000x1000bb.jpg"
+        ));
+        assert!(is_allowed(
+            "https://cdn-images.dzcdn.net/images/cover/x/1000x1000.jpg"
+        ));
     }
 
     #[test]

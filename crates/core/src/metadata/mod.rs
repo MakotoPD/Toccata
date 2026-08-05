@@ -15,6 +15,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::toc::Toc;
 
+pub mod artwork;
 pub mod cover;
 pub mod ctdb;
 pub mod discogs;
@@ -32,6 +33,8 @@ pub enum SourceId {
     Ctdb,
     Discogs,
     CoverArtArchive,
+    Itunes,
+    Deezer,
 }
 
 #[derive(Debug, thiserror::Error, Serialize)]

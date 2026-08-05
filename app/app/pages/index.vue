@@ -7,10 +7,12 @@ const { drives, selectedId, disc, faultMessage, busy, refresh, read, eject, sele
 const metadata = useMetadata()
 const release = useRelease()
 const ripping = useRip()
+const { settings, load: loadSettings } = useSettings()
 
 const coreVersion = ref<string | null>(null)
 const folder = ref<string | null>(null)
 const searchOpen = ref(false)
+const coverOpen = ref(false)
 
 const toc = computed(() => disc.value?.toc ?? null)
 
@@ -19,7 +21,14 @@ const toc = computed(() => disc.value?.toc ?? null)
  * never shows somewhere the rip would not actually write.
  */
 watch(
-  () => [release.draft.value?.artist, release.draft.value?.title, disc.value?.musicbrainzDiscId],
+  () => [
+    release.draft.value?.artist,
+    release.draft.value?.title,
+    disc.value?.musicbrainzDiscId,
+    // The pattern decides the path as much as the names do.
+    settings.value?.pattern,
+    settings.value?.outputRoot,
+  ],
   async () => {
     folder.value =
       isTauri() && disc.value
@@ -93,6 +102,7 @@ onMounted(async () => {
   }
 
   coreVersion.value = await invoke<string>('core_version')
+  await loadSettings()
   await refresh()
 })
 
@@ -207,7 +217,7 @@ const loud = `${action} border-brass-500 bg-brass-500/10 text-brass-400 hover:bg
       />
     </main>
 
-    <footer class="flex h-56 shrink-0 border-t border-chassis-800">
+    <footer class="flex h-72 shrink-0 border-t border-chassis-800">
       <OutputPanel
         :drives="drives"
         :drive-id="selectedId"
@@ -232,7 +242,7 @@ const loud = `${action} border-brass-500 bg-brass-500/10 text-brass-400 hover:bg
       <CoverTile
         :cover="metadata.cover.value"
         :title="release.draft.value?.title ?? ''"
-        @choose="searchOpen = true"
+        @choose="coverOpen = true"
       />
     </footer>
 
@@ -271,6 +281,13 @@ const loud = `${action} border-brass-500 bg-brass-500/10 text-brass-400 hover:bg
         {{ t('about.core', { version: coreVersion }) }}
       </p>
     </div>
+
+    <CoverChooser
+      v-if="coverOpen"
+      :release="metadata.release.value"
+      @close="coverOpen = false"
+      @pick="metadata.cover.value = $event"
+    />
 
     <MetadataSearchDialog
       v-if="searchOpen && disc"
