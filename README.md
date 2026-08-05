@@ -44,6 +44,7 @@ whole is GPL. This rules out a permissive license.
 | sha1 | MIT OR Apache-2.0 |
 | thiserror | MIT OR Apache-2.0 |
 | ffmpeg-next, ffmpeg-sys-next | WTFPL |
+| lofty | MIT OR Apache-2.0 |
 | FFmpeg itself (linked, not vendored) | GPL-3.0-or-later as built here |
 | windows (Windows only) | Apache-2.0 OR MIT |
 | libc (Linux and macOS only) | MIT OR Apache-2.0 |

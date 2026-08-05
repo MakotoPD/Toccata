@@ -118,6 +118,22 @@ Bundle targets come from `bundle.targets: "all"` in
 `src-tauri/tauri.conf.json`, so each platform produces what it can: NSIS and
 MSI on Windows, AppImage, deb and rpm on Linux, `.app` and `.dmg` on macOS.
 
+## Optional: APE
+
+Monkey's Audio is off by default. FFmpeg decodes APE but does not encode it,
+and the only encoder is the one in the official SDK, whose licence has
+historically carried terms that are not GPL compatible. It is therefore not
+vendored here and not fetched by the build.
+
+Turning it on means you have read the SDK's current licence yourself and are
+satisfied that distributing the result is allowed:
+
+```bash
+cargo build --features toccata-core/ape
+```
+
+Without the feature everything builds and runs as normal, one format short.
+
 ## Checks
 
 The same set CI runs:
