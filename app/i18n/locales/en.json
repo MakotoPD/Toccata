@@ -147,7 +147,7 @@
     "forRelease": "Whole disc",
     "forTrack": "Track {number}",
     "hint": "Pick a track in the list to edit that one instead.",
-    "encoderNone": "WAV stores the audio exactly as the disc holds it, so there is nothing to set. Other formats arrive with encoding."
+    "encoderNone": "FLAC is written at the highest compression, and WAV stores the audio exactly as the disc holds it, so neither has anything to set. The remaining formats arrive with their settings."
   },
   "cover": {
     "none": "No cover",
@@ -186,6 +186,7 @@
       "noSuchTrack": "The disc has no track {number}.",
       "notAudio": "Track {number} holds data, not audio.",
       "drive": "The drive stopped responding during the rip.",
+      "encode": "The audio could not be encoded. Check that FFmpeg is installed and carries the encoder for the chosen format.",
       "write": "The extracted audio could not be written to disk.",
       "cancelled": "The rip was stopped."
     }

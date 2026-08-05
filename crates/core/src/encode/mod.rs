@@ -12,10 +12,11 @@
 //! looks complete and is not. [`Encoder::finish`] is the only correct ending.
 
 pub mod flac;
+pub mod wav;
 
 use std::sync::OnceLock;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 /// Sample rate of every audio CD ever pressed.
 pub const SAMPLE_RATE: i32 = 44_100;
@@ -53,12 +54,39 @@ impl EncodeError {
     }
 }
 
-/// What every encoder in this module can do. The trait proper, with a registry
-/// and several formats behind it, comes once there is more than one of them;
-/// for now this is the shape they all have to fit.
+/// What every encoder in this module can do.
 pub trait Encoder: std::io::Write {
     /// Drains the codec, writes the container trailer and closes the file.
     fn finish(self: Box<Self>) -> Result<(), EncodeError>;
+}
+
+/// The formats a rip can be written to. The rest of the table in the brief
+/// arrives one implementation at a time; nothing outside this enum has to
+/// change when it does.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum Format {
+    /// Lossless and compressed, which is what a rip is for.
+    #[default]
+    Flac,
+    /// The samples with a header in front and nothing else done to them.
+    Wav,
+}
+
+impl Format {
+    pub fn extension(self) -> &'static str {
+        match self {
+            Self::Flac => "flac",
+            Self::Wav => "wav",
+        }
+    }
+
+    pub fn create(self, path: &std::path::Path) -> Result<Box<dyn Encoder>, EncodeError> {
+        Ok(match self {
+            Self::Flac => Box::new(flac::Flac::create(path, flac::MAX_COMPRESSION)?),
+            Self::Wav => Box::new(wav::Wav::create(path)?),
+        })
+    }
 }
 
 /// ffmpeg wants setting up once per process, and no caller should have to know

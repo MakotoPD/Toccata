@@ -11,6 +11,7 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
+use crate::encode::Format;
 use crate::naming::template;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -24,6 +25,10 @@ pub struct Settings {
     /// Pattern for folders and file name together, `/` separating them.
     #[serde(default = "default_pattern")]
     pub pattern: String,
+
+    /// What a rip is written as.
+    #[serde(default)]
+    pub format: Format,
 
     /// Read offset of the drive in samples, EAC convention, per drive so that
     /// swapping drives does not silently ruin a rip.
@@ -40,6 +45,7 @@ impl Default for Settings {
         Self {
             output_root: None,
             pattern: default_pattern(),
+            format: Format::default(),
             drive_offsets: std::collections::HashMap::new(),
         }
     }

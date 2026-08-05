@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { DriveInfo } from '~/types/disc'
+import type { DriveInfo, Format } from '~/types/disc'
 
 defineProps<{
   drives: DriveInfo[]
@@ -21,6 +21,13 @@ const pattern = computed({
   },
 })
 
+const format = computed({
+  get: () => settings.value?.format ?? 'flac',
+  set: (value: Format) => {
+    void save({ format: value })
+  },
+})
+
 /** Built here rather than in the template: a brace inside an interpolation
  *  closes it early. */
 const placeholders = computed(() => tokens.value.map((token) => `{${token}}`).join(' '))
@@ -37,10 +44,12 @@ const small =
   <section
     class="flex w-96 shrink-0 flex-col gap-2 overflow-y-auto border-r border-chassis-800 px-6 py-4"
   >
+    <!-- Format names are not translated, so the options carry no i18n key. -->
     <div :class="row">
       <span :class="label">{{ t('output.format') }}</span>
-      <select :class="control" disabled>
-        <option>WAV</option>
+      <select v-model="format" :class="control" :disabled="busy">
+        <option value="flac">FLAC</option>
+        <option value="wav">WAV</option>
       </select>
     </div>
 

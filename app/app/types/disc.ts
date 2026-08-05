@@ -104,6 +104,7 @@ export type RipFault =
   | { code: 'noSuchTrack'; number: number }
   | { code: 'notAudio'; number: number }
   | { code: 'drive' }
+  | { code: 'encode' }
   | { code: 'write' }
   | { code: 'cancelled' }
 
@@ -123,10 +124,14 @@ export interface Artwork {
   height: number | null
 }
 
+/** Names of formats are never translated, so these double as their labels. */
+export type Format = 'flac' | 'wav'
+
 export interface Settings {
   /** Null means the system music folder, resolved by the backend. */
   outputRoot: string | null
   /** Folders and file name together, with `/` between them. */
   pattern: string
+  format: Format
   driveOffsets: Record<string, number>
 }

@@ -8,7 +8,7 @@
 //! the system, and correcting for it is what makes a rip line up with everyone
 //! else's. The convention, and the sign, are the ones EAC established.
 
-use std::io::{self, Write};
+use std::io::Write;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use serde::{Deserialize, Serialize};
@@ -39,6 +39,9 @@ pub enum RipError {
     #[error(transparent)]
     Drive(#[from] DriveError),
 
+    #[error(transparent)]
+    Encode(#[from] crate::encode::EncodeError),
+
     #[error("writing the extracted audio failed")]
     Write,
 
@@ -66,7 +69,11 @@ pub struct Extracted {
     pub unreadable_sectors: u32,
 }
 
-/// Reads one track and writes it out as a WAV file.
+/// Reads one track and writes its samples out.
+///
+/// What comes out is the audio and nothing else: interleaved 16 bit stereo,
+/// the way it sits on the disc. Wrapping that in a container is the encoder's
+/// job, which is what lets one read feed several of them.
 ///
 /// `progress` is called with the number of sectors done and the total. The rip
 /// stops as soon as `cancelled` is set, leaving a partial file for the caller
@@ -94,8 +101,6 @@ pub fn track<W: Write>(
     let first_sample =
         i64::from(track.start) * i64::from(SAMPLES_PER_SECTOR) + i64::from(options.drive_offset);
     let plan = Plan::new(first_sample, samples);
-
-    write_wav_header(output, samples).map_err(|_| RipError::Write)?;
 
     let mut buffer = vec![0u8; CHUNK_SECTORS as usize * BYTES_PER_SECTOR];
     let mut unreadable = 0;
@@ -165,8 +170,11 @@ pub fn preview<W: Write>(
         return Err(RipError::NotAudio { number });
     }
 
+    // Unlike a rip, a preview carries its own container: it goes straight to
+    // the window to be played, and the length is known before a sector is read.
     let sectors = track.length.min(seconds * SECTORS_PER_SECOND);
-    write_wav_header(output, sectors * SAMPLES_PER_SECTOR).map_err(|_| RipError::Write)?;
+    let bytes = sectors * SAMPLES_PER_SECTOR * BYTES_PER_SAMPLE as u32;
+    crate::encode::wav::write_header(output, bytes).map_err(|_| RipError::Write)?;
 
     let mut buffer = vec![0u8; CHUNK_SECTORS as usize * BYTES_PER_SECTOR];
     let mut done = 0;
@@ -248,32 +256,6 @@ impl Plan {
     }
 }
 
-/// A CD is already 16 bit stereo at 44100 Hz, so the sectors go into the file
-/// untouched and only the header has to be produced.
-fn write_wav_header<W: Write>(output: &mut W, samples: u32) -> io::Result<()> {
-    const SAMPLE_RATE: u32 = 44_100;
-    const CHANNELS: u16 = 2;
-    const BITS: u16 = 16;
-
-    let data = samples * BYTES_PER_SAMPLE as u32;
-    let byte_rate = SAMPLE_RATE * u32::from(CHANNELS) * u32::from(BITS / 8);
-
-    output.write_all(b"RIFF")?;
-    output.write_all(&(36 + data).to_le_bytes())?;
-    output.write_all(b"WAVEfmt ")?;
-    output.write_all(&16u32.to_le_bytes())?;
-    output.write_all(&1u16.to_le_bytes())?;
-    output.write_all(&CHANNELS.to_le_bytes())?;
-    output.write_all(&SAMPLE_RATE.to_le_bytes())?;
-    output.write_all(&byte_rate.to_le_bytes())?;
-    output.write_all(&(CHANNELS * BITS / 8).to_le_bytes())?;
-    output.write_all(&BITS.to_le_bytes())?;
-    output.write_all(b"data")?;
-    output.write_all(&data.to_le_bytes())?;
-
-    Ok(())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -314,22 +296,6 @@ mod tests {
             (SAMPLES_PER_SECTOR as usize - 6) * BYTES_PER_SAMPLE
         );
         assert_eq!(plan.sectors, 2);
-    }
-
-    #[test]
-    fn the_header_describes_the_audio_that_follows() {
-        let mut out = Vec::new();
-        write_wav_header(&mut out, SAMPLES_PER_SECTOR).unwrap();
-
-        assert_eq!(out.len(), 44);
-        assert_eq!(&out[0..4], b"RIFF");
-        assert_eq!(&out[8..12], b"WAVE");
-        assert_eq!(&out[36..40], b"data");
-
-        let data = u32::from_le_bytes(out[40..44].try_into().unwrap());
-        assert_eq!(data, SAMPLES_PER_SECTOR * BYTES_PER_SAMPLE as u32);
-        assert_eq!(u32::from_le_bytes(out[4..8].try_into().unwrap()), 36 + data);
-        assert_eq!(u32::from_le_bytes(out[24..28].try_into().unwrap()), 44_100);
     }
 
     /// A disc that hands back a counter in every sample, so the extracted bytes
@@ -435,10 +401,11 @@ mod tests {
         assert_eq!(extracted.unreadable_sectors, 0);
         assert_eq!(
             out.len(),
-            44 + 10 * SAMPLES_PER_SECTOR as usize * BYTES_PER_SAMPLE
+            10 * SAMPLES_PER_SECTOR as usize * BYTES_PER_SAMPLE,
+            "the samples come out on their own, with no container around them"
         );
         // Track two starts at sector 10, and the disc numbers its sectors.
-        assert_eq!(&out[44..46], &10u16.to_le_bytes());
+        assert_eq!(&out[0..2], &10u16.to_le_bytes());
     }
 
     #[test]
@@ -449,7 +416,7 @@ mod tests {
 
         assert_eq!(straight.len(), shifted.len());
         // A one sector offset makes track two start where sector 11 does.
-        assert_eq!(&shifted[44..46], &11u16.to_le_bytes());
+        assert_eq!(&shifted[0..2], &11u16.to_le_bytes());
     }
 
     #[test]
@@ -476,7 +443,7 @@ mod tests {
         let (out, extracted) = rip(&mut drive, &toc, 2, 0);
 
         assert_eq!(extracted.unreadable_sectors, 10);
-        assert!(out[44..].iter().all(|byte| *byte == 0));
+        assert!(out.iter().all(|byte| *byte == 0));
     }
 
     #[test]

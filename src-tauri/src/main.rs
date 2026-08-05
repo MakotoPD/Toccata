@@ -4,7 +4,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use std::fs;
-use std::io::BufWriter;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -15,6 +14,7 @@ use serde::Serialize;
 use tauri::ipc::Channel;
 use tauri::{AppHandle, Manager, State};
 use toccata_core::drive::{self, DriveError, DriveInfo};
+use toccata_core::encode::Format;
 use toccata_core::metadata::artwork::{Artwork, Artworks, Query as ArtworkQuery};
 use toccata_core::metadata::cover::Covers;
 use toccata_core::metadata::discogs::Discogs;
@@ -397,16 +397,18 @@ async fn rip_disc(
     cancelled.store(false, Ordering::Relaxed);
 
     let root = output_folder(&app, &state, &toc, release.as_ref());
-    let pattern = state
+    let settings = state
         .settings
         .lock()
         .expect("state lock is never held across a panic")
-        .pattern
         .clone();
+
+    let (pattern, format) = (settings.pattern, settings.format);
 
     tauri::async_runtime::spawn_blocking(move || {
         rip_all(
-            &drive_id, &toc, release, &tracks, &options, &root, &pattern, &channel, &cancelled,
+            &drive_id, &toc, release, &tracks, &options, &root, &pattern, format, &channel,
+            &cancelled,
         )
     })
     .await
@@ -422,6 +424,7 @@ fn rip_all(
     options: &Options,
     root: &PathBuf,
     pattern: &str,
+    format: Format,
     channel: &Channel<RipEvent>,
     cancelled: &AtomicBool,
 ) -> Result<(), RipError> {
@@ -453,7 +456,7 @@ fn rip_all(
             .pop()
             .unwrap_or_else(|| naming::track_file(number, ""));
 
-        let file = root.join(format!("{name}.wav"));
+        let file = root.join(format!("{name}.{}", format.extension()));
         let _ = channel.send(RipEvent::Started {
             track: number,
             position: index as u32 + 1,
@@ -461,7 +464,7 @@ fn rip_all(
             file: file.display().to_string(),
         });
 
-        let mut output = BufWriter::new(fs::File::create(&file).map_err(|_| RipError::Write)?);
+        let mut output = format.create(&file)?;
         let outcome = rip::track(
             handle.as_mut(),
             toc,
@@ -480,6 +483,9 @@ fn rip_all(
 
         match outcome {
             Ok(extracted) => {
+                // The codec still holds frames and the container still owes a
+                // trailer, so the file is only real once this returns.
+                output.finish()?;
                 unreadable += extracted.unreadable_sectors;
 
                 ripped.push(tag::RippedTrack {

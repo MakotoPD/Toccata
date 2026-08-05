@@ -147,7 +147,7 @@
     "forRelease": "Cała płyta",
     "forTrack": "Ścieżka {number}",
     "hint": "Zaznacz ścieżkę na liście, żeby edytować ją osobno.",
-    "encoderNone": "WAV zapisuje dźwięk dokładnie tak, jak leży na płycie, więc nie ma czego ustawiać. Pozostałe formaty dojdą razem z enkodowaniem."
+    "encoderNone": "FLAC zapisujemy z maksymalną kompresją, a WAV oddaje dźwięk dokładnie tak, jak leży na płycie, więc w żadnym nie ma czego ustawiać. Pozostałe formaty dojdą razem ze swoimi ustawieniami."
   },
   "cover": {
     "none": "Brak okładki",
@@ -186,6 +186,7 @@
       "noSuchTrack": "Płyta nie ma ścieżki {number}.",
       "notAudio": "Ścieżka {number} zawiera dane, nie audio.",
       "drive": "Napęd przestał odpowiadać w trakcie zgrywania.",
+      "encode": "Nie udało się zakodować dźwięku. Sprawdź, czy FFmpeg jest zainstalowany i ma enkoder wybranego formatu.",
       "write": "Nie udało się zapisać zgranego audio na dysk.",
       "cancelled": "Zgrywanie zostało zatrzymane."
     }

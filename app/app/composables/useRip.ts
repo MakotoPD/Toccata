@@ -45,6 +45,7 @@ export function useRip() {
         return t(`error.rip.${value.code}`, { ...value })
       case 'drive':
         return t('error.rip.drive')
+      case 'encode':
       case 'write':
       case 'cancelled':
         return t(`error.rip.${value.code}`)
