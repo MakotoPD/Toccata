@@ -29,7 +29,8 @@
         "default-src": "'self'",
         "connect-src": "ipc: http://ipc.localhost",
         "img-src": "'self' asset: http://asset.localhost blob: data: https://coverartarchive.org https://*.archive.org https://i.discogs.com https://*.mzstatic.com https://*.dzcdn.net",
-        "style-src": "'self' 'unsafe-inline'"
+        "style-src": "'self' 'unsafe-inline'",
+        "media-src": "blob:"
       }
     }
   },

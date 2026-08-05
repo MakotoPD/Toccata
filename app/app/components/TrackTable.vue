@@ -9,9 +9,19 @@ const props = defineProps<{
   included: (number: number) => boolean
   /** Per track, how far the rip has got, when one is running. */
   status: (number: number) => 'waiting' | 'reading' | 'done' | 'failed' | null
+  /** The track being listened to, and the one still being read for listening. */
+  playing: number | null
+  loading: number | null
+  /** A rip has the drive, so nothing else can read from it. */
+  busy: boolean
 }>()
 
-const emit = defineEmits<{ select: [number]; toggle: [number]; toggleAll: [boolean] }>()
+const emit = defineEmits<{
+  select: [number]
+  toggle: [number]
+  toggleAll: [boolean]
+  play: [number]
+}>()
 
 const { t, locale } = useI18n()
 const { fromFrames } = useCdTime()
@@ -57,6 +67,7 @@ const statusTone: Record<string, string> = {
             @change="emit('toggleAll', !allIncluded)"
           />
         </th>
+        <th scope="col" class="w-8" />
         <th scope="col" class="w-10 py-1.5 text-right font-normal">#</th>
         <th scope="col" class="py-1.5 pl-4 text-left font-normal">{{ t('track.title') }}</th>
         <th scope="col" class="w-56 py-1.5 text-left font-normal">{{ t('editor.artist') }}</th>
@@ -87,6 +98,24 @@ const statusTone: Record<string, string> = {
             @click.stop
             @change="emit('toggle', track.number)"
           />
+        </td>
+
+        <td class="py-1.5">
+          <button
+            v-if="track.audio"
+            type="button"
+            class="w-full text-[0.6875rem] text-etch-600 transition-colors hover:text-brass-400 focus-visible:outline focus-visible:outline-1 focus-visible:-outline-offset-2 focus-visible:outline-brass-500 disabled:opacity-40"
+            :class="playing === track.number && 'text-brass-400'"
+            :disabled="busy || (loading !== null && loading !== track.number)"
+            :aria-label="
+              playing === track.number
+                ? t('track.stop', { number: track.number })
+                : t('track.play', { number: track.number })
+            "
+            @click.stop="emit('play', track.number)"
+          >
+            {{ loading === track.number ? '⋯' : playing === track.number ? '■' : '▶' }}
+          </button>
         </td>
 
         <td

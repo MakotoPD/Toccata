@@ -19,9 +19,12 @@ use crate::toc::Toc;
 /// Bytes in one stereo sample frame: two channels of 16 bit.
 const BYTES_PER_SAMPLE: usize = 4;
 
+/// A CD holds seventy five sectors of audio per second.
+pub const SECTORS_PER_SECOND: u32 = 75;
+
 /// Sectors per read. One second of audio, which is also the most the Linux
 /// driver accepts in a single call.
-const CHUNK_SECTORS: u32 = 75;
+const CHUNK_SECTORS: u32 = SECTORS_PER_SECOND;
 
 #[derive(Debug, Clone, thiserror::Error, Serialize)]
 #[serde(
@@ -139,6 +142,51 @@ pub fn track<W: Write>(
         samples,
         unreadable_sectors: unreadable,
     })
+}
+
+/// Reads the opening of a track so it can be listened to.
+///
+/// This is not a rip: the drive offset is left alone, since a handful of
+/// samples of drift cannot be heard and the audio is thrown away as soon as it
+/// has been played. A sector the drive refuses comes out as silence rather than
+/// as an error, because a preview that stops halfway is worse than one with a
+/// gap in it.
+pub fn preview<W: Write>(
+    drive: &mut dyn Drive,
+    toc: &Toc,
+    number: u8,
+    seconds: u32,
+    output: &mut W,
+) -> Result<(), RipError> {
+    let track = toc
+        .tracks
+        .iter()
+        .find(|track| track.number == number)
+        .ok_or(RipError::NoSuchTrack { number })?;
+
+    if !track.audio {
+        return Err(RipError::NotAudio { number });
+    }
+
+    let sectors = track.length.min(seconds * SECTORS_PER_SECOND);
+    write_wav_header(output, sectors * SAMPLES_PER_SECTOR).map_err(|_| RipError::Write)?;
+
+    let mut buffer = vec![0u8; CHUNK_SECTORS as usize * BYTES_PER_SECTOR];
+    let mut done = 0;
+
+    while done < sectors {
+        let batch = (sectors - done).min(CHUNK_SECTORS);
+        let filled = &mut buffer[..batch as usize * BYTES_PER_SECTOR];
+
+        read_clamped(drive, toc, i64::from(track.start + done), batch, filled)?;
+        output.write_all(filled).map_err(|_| RipError::Write)?;
+
+        done += batch;
+    }
+
+    output.flush().map_err(|_| RipError::Write)?;
+
+    Ok(())
 }
 
 /// Reads a run of sectors, silencing the parts that fall outside the disc and
@@ -450,6 +498,21 @@ mod tests {
         );
 
         assert!(matches!(result, Err(RipError::Cancelled)));
+    }
+
+    #[test]
+    fn a_preview_stops_at_the_end_of_a_short_track() {
+        let (mut drive, toc) = disc();
+        let mut out = Vec::new();
+
+        // Track two is ten sectors long, so a minute of preview cannot happen.
+        preview(&mut drive, &toc, 2, 60, &mut out).expect("the track is readable");
+
+        assert_eq!(
+            out.len(),
+            44 + 10 * SAMPLES_PER_SECTOR as usize * BYTES_PER_SAMPLE
+        );
+        assert_eq!(&out[44..46], &10u16.to_le_bytes());
     }
 
     #[test]

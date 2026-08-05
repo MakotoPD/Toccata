@@ -36,7 +36,9 @@
     "status": "Status",
     "size": "Size",
     "include": "Rip track {number}",
-    "includeAll": "Rip every track"
+    "includeAll": "Rip every track",
+    "play": "Listen to track {number}",
+    "stop": "Stop track {number}"
   },
   "metadata": {
     "identify": "Identify disc",

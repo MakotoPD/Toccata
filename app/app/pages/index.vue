@@ -7,6 +7,7 @@ const { drives, selectedId, disc, faultMessage, busy, refresh, read, eject, sele
 const metadata = useMetadata()
 const release = useRelease()
 const ripping = useRip()
+const preview = usePreview()
 const { settings, load: loadSettings } = useSettings()
 
 const coreVersion = ref<string | null>(null)
@@ -49,6 +50,7 @@ async function readDisc() {
   release.clear()
   ripping.reset()
   metadata.reset()
+  preview.stop()
 
   await read()
 
@@ -69,6 +71,7 @@ async function ejectDisc() {
   release.clear()
   ripping.reset()
   metadata.reset()
+  preview.stop()
   await eject()
 }
 
@@ -211,9 +214,13 @@ const loud = `${action} border-brass-500 bg-brass-500/10 text-brass-400 hover:bg
         :selected="release.selected.value"
         :included="release.isIncluded"
         :status="ripping.statusOf"
+        :playing="preview.playing.value"
+        :loading="preview.loading.value"
+        :busy="ripping.running.value"
         @select="release.selected.value = release.selected.value === $event ? null : $event"
         @toggle="release.toggle"
         @toggle-all="toggleAll"
+        @play="preview.play(selectedId, $event)"
       />
     </main>
 

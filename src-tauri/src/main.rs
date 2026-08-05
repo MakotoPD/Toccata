@@ -503,6 +503,39 @@ fn rip_all(
     Ok(())
 }
 
+/// How much of a track is read for listening. Long enough to tell one pressing
+/// from another, short enough that the drive answers while the user waits.
+const PREVIEW_SECONDS: u32 = 30;
+
+/// The opening of a track, handed over as WAV bytes for the window to play.
+///
+/// The audio travels over the IPC channel rather than through a file, which
+/// saves having to decide when a temporary file stops being needed.
+#[tauri::command]
+async fn preview_track(
+    drive_id: String,
+    number: u8,
+    state: State<'_, AppState>,
+) -> Result<tauri::ipc::Response, RipError> {
+    let toc = state
+        .disc
+        .lock()
+        .expect("state lock is never held across a panic")
+        .clone()
+        .ok_or(RipError::NoSuchTrack { number })?;
+
+    let audio = tauri::async_runtime::spawn_blocking(move || {
+        let mut handle = drive::open(&drive_id)?;
+        let mut audio = Vec::new();
+        rip::preview(handle.as_mut(), &toc, number, PREVIEW_SECONDS, &mut audio)?;
+        Ok::<_, RipError>(audio)
+    })
+    .await
+    .map_err(|_| RipError::Write)??;
+
+    Ok(tauri::ipc::Response::new(audio))
+}
+
 #[tauri::command]
 fn cancel_rip(state: State<'_, AppState>) {
     state.cancelled.store(true, Ordering::Relaxed);
@@ -555,6 +588,7 @@ fn main() {
             forget_release,
             rip_disc,
             rip_folder,
+            preview_track,
             get_settings,
             set_settings,
             naming_tokens,

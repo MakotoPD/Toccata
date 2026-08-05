@@ -36,7 +36,9 @@
     "status": "Stan",
     "size": "Rozmiar",
     "include": "Zgraj ścieżkę {number}",
-    "includeAll": "Zgraj wszystkie ścieżki"
+    "includeAll": "Zgraj wszystkie ścieżki",
+    "play": "Posłuchaj ścieżki {number}",
+    "stop": "Zatrzymaj ścieżkę {number}"
   },
   "metadata": {
     "identify": "Rozpoznaj płytę",
