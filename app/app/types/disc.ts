@@ -124,14 +124,35 @@ export interface Artwork {
   height: number | null
 }
 
-/** Names of formats are never translated, so these double as their labels. */
-export type Format = 'flac' | 'wav'
+export type Format =
+  | 'flac'
+  | 'wav'
+  | 'aiff'
+  | 'm4a'
+  | 'm4aAac'
+  | 'mp3'
+  | 'aac'
+  | 'oggVorbis'
+  | 'ape'
+
+/** Described by the backend, so the list can never offer what it cannot write. */
+export interface FormatInfo {
+  id: Format
+  /** Format and codec names are never translated. */
+  label: string
+  extension: string
+  lossy: boolean
+  defaultKbps: number | null
+}
 
 export interface Settings {
   /** Null means the system music folder, resolved by the backend. */
   outputRoot: string | null
   /** Folders and file name together, with `/` between them. */
   pattern: string
-  format: Format
+  /** Several at once: the disc is read once and every format comes out of it. */
+  formats: Format[]
+  /** Only the lossy formats look at this; the rest ignore it. */
+  bitrates: Partial<Record<Format, number>>
   driveOffsets: Record<string, number>
 }

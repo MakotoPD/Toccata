@@ -14,7 +14,7 @@ use serde::Serialize;
 use tauri::ipc::Channel;
 use tauri::{AppHandle, Manager, State};
 use toccata_core::drive::{self, DriveError, DriveInfo};
-use toccata_core::encode::Format;
+use toccata_core::encode::{self, Format};
 use toccata_core::metadata::artwork::{Artwork, Artworks, Query as ArtworkQuery};
 use toccata_core::metadata::cover::{self, Covers};
 use toccata_core::metadata::discogs::Discogs;
@@ -232,6 +232,33 @@ fn naming_tokens() -> Vec<&'static str> {
     template::TOKENS.to_vec()
 }
 
+/// One entry per format the build can actually write, so the interface never
+/// offers something that is not there. Names of formats and codecs are not
+/// translated, which is why the label travels with them.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct FormatInfo {
+    id: Format,
+    label: &'static str,
+    extension: &'static str,
+    lossy: bool,
+    default_kbps: Option<u32>,
+}
+
+#[tauri::command]
+fn formats() -> Vec<FormatInfo> {
+    encode::ALL
+        .iter()
+        .map(|format| FormatInfo {
+            id: *format,
+            label: format.label(),
+            extension: format.extension(),
+            lossy: format.lossy(),
+            default_kbps: format.default_kbps(),
+        })
+        .collect()
+}
+
 /// Cover art from every service that answers without an account.
 #[tauri::command]
 async fn search_artwork(
@@ -405,7 +432,12 @@ async fn rip_disc(
         .expect("state lock is never held across a panic")
         .clone();
 
-    let (pattern, format) = (settings.pattern, settings.format);
+    let pattern = settings.pattern;
+    let formats: Vec<(Format, Option<u32>)> = settings
+        .formats
+        .iter()
+        .map(|format| (*format, settings.bitrates.get(format).copied()))
+        .collect();
 
     // The cover arrives as the data URI the window is showing, so what gets
     // embedded is what the user is looking at rather than a second download.
@@ -413,8 +445,8 @@ async fn rip_disc(
 
     tauri::async_runtime::spawn_blocking(move || {
         rip_all(
-            &drive_id, &toc, release, &tracks, &options, &root, &pattern, format, cover, &channel,
-            &cancelled,
+            &drive_id, &toc, release, &tracks, &options, &root, &pattern, &formats, cover,
+            &channel, &cancelled,
         )
     })
     .await
@@ -428,22 +460,35 @@ fn rip_all(
     release: Option<ReleaseCandidate>,
     wanted: &[u8],
     options: &Options,
-    root: &PathBuf,
+    root: &Path,
     pattern: &str,
-    format: Format,
+    formats: &[(Format, Option<u32>)],
     cover: Option<Vec<u8>>,
     channel: &Channel<RipEvent>,
     cancelled: &AtomicBool,
 ) -> Result<(), RipError> {
     let mut handle = drive::open(drive_id)?;
-    fs::create_dir_all(root).map_err(|_| RipError::Write)?;
+
+    // Several formats share a folder only if they cannot collide, and two of
+    // them can: `.m4a` holds either ALAC or AAC. So each gets its own.
+    let folders: Vec<PathBuf> = formats
+        .iter()
+        .map(|(format, _)| match formats.len() {
+            1 => root.to_path_buf(),
+            _ => root.join(format.folder()),
+        })
+        .collect();
+
+    for folder in &folders {
+        fs::create_dir_all(folder).map_err(|_| RipError::Write)?;
+    }
 
     let started = SystemTime::now();
     let drive_name = handle.info().name.clone();
     let mut ripped: Vec<tag::RippedTrack> = Vec::new();
     // Tagging waits until the last track is in, since a tag carries how many
     // there were and that is not known while they are still being read.
-    let mut written: Vec<PathBuf> = Vec::new();
+    let mut written: Vec<Vec<PathBuf>> = Vec::new();
 
     let audio: Vec<u8> = toc
         .tracks
@@ -466,15 +511,28 @@ fn rip_all(
             .pop()
             .unwrap_or_else(|| naming::track_file(number, ""));
 
-        let file = root.join(format!("{name}.{}", format.extension()));
+        let files: Vec<PathBuf> = formats
+            .iter()
+            .zip(&folders)
+            .map(|((format, _), folder)| folder.join(format!("{name}.{}", format.extension())))
+            .collect();
+
         let _ = channel.send(RipEvent::Started {
             track: number,
             position: index as u32 + 1,
             of: audio.len() as u32,
-            file: file.display().to_string(),
+            file: files[0].display().to_string(),
         });
 
-        let mut output = format.create(&file)?;
+        // One read of the disc feeds every format at once. Reading it again
+        // per format would cost minutes and wear the drive for nothing.
+        let mut output = encode::Fanout::new(
+            formats
+                .iter()
+                .zip(&files)
+                .map(|((format, kbps), file)| format.create_with(file, *kbps))
+                .collect::<Result<Vec<_>, _>>()?,
+        );
         let outcome = rip::track(
             handle.as_mut(),
             toc,
@@ -498,12 +556,11 @@ fn rip_all(
                 output.finish()?;
                 unreadable += extracted.unreadable_sectors;
 
-                written.push(file.clone());
                 ripped.push(tag::RippedTrack {
                     number,
-                    file: file
-                        .file_name()
-                        .map_or_else(String::new, |name| name.to_string_lossy().into_owned()),
+                    // The name without its extension; each format's cue sheet
+                    // puts its own back on.
+                    file: name.clone(),
                     title: entry.map(|entry| entry.title.clone()).unwrap_or_default(),
                     artist: entry
                         .map(|entry| entry.artist.clone())
@@ -520,6 +577,7 @@ fn rip_all(
                         .any(|track| track.number == number && track.pre_emphasis),
                     unreadable_sectors: extracted.unreadable_sectors,
                 });
+                written.push(files);
 
                 let _ = channel.send(RipEvent::Finished {
                     track: number,
@@ -527,9 +585,11 @@ fn rip_all(
                 });
             }
             Err(reason) => {
-                // A half written file is worse than none at all.
+                // Half written files are worse than none at all.
                 drop(output);
-                let _ = fs::remove_file(&file);
+                for file in &files {
+                    let _ = fs::remove_file(file);
+                }
 
                 let _ = channel.send(RipEvent::Failed {
                     track: number,
@@ -541,8 +601,19 @@ fn rip_all(
     }
 
     let album = describe(toc, release.as_ref(), ripped);
-    write_tags(&album, release.as_ref(), &written, cover)?;
-    write_artefacts(toc, &album, root, &drive_name, options, started)?;
+
+    // Each format is a finished album of its own: its own files to tag, its
+    // own cue sheet naming them, its own copy of the log beside them.
+    for (index, ((format, _), folder)) in formats.iter().zip(&folders).enumerate() {
+        let named = with_extension(&album, format.extension());
+        let files: Vec<PathBuf> = written
+            .iter()
+            .filter_map(|per| per.get(index).cloned())
+            .collect();
+
+        write_tags(&named, release.as_ref(), &files, cover.as_deref());
+        write_artefacts(toc, &named, folder, &drive_name, options, started)?;
+    }
 
     let _ = channel.send(RipEvent::Done {
         folder: root.display().to_string(),
@@ -579,6 +650,17 @@ fn describe(
     }
 }
 
+/// The same album with its file names carrying one format's extension.
+fn with_extension(album: &tag::Album, extension: &str) -> tag::Album {
+    let mut named = album.clone();
+
+    for track in &mut named.tracks {
+        track.file = format!("{}.{extension}", track.file);
+    }
+
+    named
+}
+
 /// Puts the metadata inside the audio files themselves, which is the only
 /// place most players ever look.
 ///
@@ -589,15 +671,15 @@ fn write_tags(
     album: &tag::Album,
     release: Option<&ReleaseCandidate>,
     files: &[PathBuf],
-    cover: Option<Vec<u8>>,
-) -> Result<(), RipError> {
+    cover: Option<&[u8]>,
+) {
     let extras = tag::write::Extras {
         composer: release.and_then(|release| release.composer.as_deref()),
         comment: release.and_then(|release| release.comment.as_deref()),
         compilation: release.is_some_and(|release| release.compilation),
         disc_number: release.map_or(0, |release| release.disc_number),
         disc_total: release.and_then(|release| release.disc_total),
-        cover: cover.as_deref(),
+        cover,
         musicbrainz_release_id: release
             .filter(|release| release.source_id == SourceId::MusicBrainz)
             .map(|release| release.id.as_str()),
@@ -606,8 +688,6 @@ fn write_tags(
     for (path, track) in files.iter().zip(&album.tracks) {
         let _ = tag::write::track(path, album, track, &extras);
     }
-
-    Ok(())
 }
 
 fn write_artefacts(
@@ -731,6 +811,7 @@ fn main() {
             get_settings,
             set_settings,
             naming_tokens,
+            formats,
             search_artwork,
             cancel_rip,
             eject

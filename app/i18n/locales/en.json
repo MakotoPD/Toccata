@@ -139,7 +139,9 @@
     "root": "Library",
     "rootDefault": "system music folder",
     "browse": "Browse",
-    "reset": "Default"
+    "reset": "Default",
+    "bitrate": "Bit rate for {format}",
+    "perFormatFolders": "Each format goes into a folder of its own, since two of them share the .m4a extension."
   },
   "panel": {
     "tags": "Tags",
@@ -147,7 +149,7 @@
     "forRelease": "Whole disc",
     "forTrack": "Track {number}",
     "hint": "Pick a track in the list to edit that one instead.",
-    "encoderNone": "FLAC is written at the highest compression, and WAV stores the audio exactly as the disc holds it, so neither has anything to set. The remaining formats arrive with their settings."
+    "encoderNone": "The lossless formats keep every sample and are written at the best compression their codec offers, so there is nothing to decide. The lossy ones carry their bit rate next to the format itself."
   },
   "cover": {
     "none": "No cover",

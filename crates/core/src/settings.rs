@@ -26,9 +26,15 @@ pub struct Settings {
     #[serde(default = "default_pattern")]
     pub pattern: String,
 
-    /// What a rip is written as.
+    /// What a rip is written as. Several at once is normal: the disc is read
+    /// once and every format comes out of that one read.
+    #[serde(default = "default_formats")]
+    pub formats: Vec<Format>,
+
+    /// Bit rate in kbps for the formats where that means anything. Absent
+    /// entries fall back to the format's own default.
     #[serde(default)]
-    pub format: Format,
+    pub bitrates: std::collections::HashMap<Format, u32>,
 
     /// Read offset of the drive in samples, EAC convention, per drive so that
     /// swapping drives does not silently ruin a rip.
@@ -40,12 +46,17 @@ fn default_pattern() -> String {
     template::DEFAULT.to_owned()
 }
 
+fn default_formats() -> Vec<Format> {
+    vec![Format::default()]
+}
+
 impl Default for Settings {
     fn default() -> Self {
         Self {
             output_root: None,
             pattern: default_pattern(),
-            format: Format::default(),
+            formats: default_formats(),
+            bitrates: std::collections::HashMap::new(),
             drive_offsets: std::collections::HashMap::new(),
         }
     }

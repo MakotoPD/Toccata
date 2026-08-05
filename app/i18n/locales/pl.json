@@ -139,7 +139,9 @@
     "root": "Biblioteka",
     "rootDefault": "systemowy folder muzyki",
     "browse": "Wybierz",
-    "reset": "Domyślny"
+    "reset": "Domyślny",
+    "bitrate": "Bitrate dla {format}",
+    "perFormatFolders": "Każdy format trafia do własnego folderu, bo dwa z nich mają to samo rozszerzenie .m4a."
   },
   "panel": {
     "tags": "Tagi",
@@ -147,7 +149,7 @@
     "forRelease": "Cała płyta",
     "forTrack": "Ścieżka {number}",
     "hint": "Zaznacz ścieżkę na liście, żeby edytować ją osobno.",
-    "encoderNone": "FLAC zapisujemy z maksymalną kompresją, a WAV oddaje dźwięk dokładnie tak, jak leży na płycie, więc w żadnym nie ma czego ustawiać. Pozostałe formaty dojdą razem ze swoimi ustawieniami."
+    "encoderNone": "Formaty bezstratne zachowują każdą próbkę i zapisujemy je z najlepszą kompresją, jaką daje ich kodek, więc nie ma tu czego wybierać. Stratne mają bitrate obok samego formatu."
   },
   "cover": {
     "none": "Brak okładki",

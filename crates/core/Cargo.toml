@@ -5,6 +5,12 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 
+[features]
+# Monkey's Audio, which needs an SDK that cannot be shipped with the source and
+# whose licence has to be read before it is used. Off by default; without it the
+# application builds and runs one format short.
+ape = []
+
 [dependencies]
 ffmpeg-next = { version = "9.0.0", default-features = false, features = ["codec", "format", "software-resampling"] }
 lofty = "0.24.0"

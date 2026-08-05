@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { DriveInfo, Format } from '~/types/disc'
+import type { DriveInfo } from '~/types/disc'
 
 defineProps<{
   drives: DriveInfo[]
@@ -12,7 +12,13 @@ defineProps<{
 const emit = defineEmits<{ selectDrive: [string]; reveal: [] }>()
 
 const { t } = useI18n()
-const { settings, tokens, save, chooseRoot, clearRoot } = useSettings()
+const { settings, tokens, formats, save, toggleFormat, setBitrate, chooseRoot, clearRoot } =
+  useSettings()
+
+/** The rates worth offering; anything finer is not audible on a CD source. */
+const BITRATES = [128, 160, 192, 224, 256, 320]
+
+const chosen = computed(() => settings.value?.formats ?? [])
 
 const pattern = computed({
   get: () => settings.value?.pattern ?? '',
@@ -21,12 +27,6 @@ const pattern = computed({
   },
 })
 
-const format = computed({
-  get: () => settings.value?.format ?? 'flac',
-  set: (value: Format) => {
-    void save({ format: value })
-  },
-})
 
 /** Built here rather than in the template: a brace inside an interpolation
  *  closes it early. */
@@ -44,14 +44,44 @@ const small =
   <section
     class="flex w-96 shrink-0 flex-col gap-2 overflow-y-auto border-r border-chassis-800 px-6 py-4"
   >
-    <!-- Format names are not translated, so the options carry no i18n key. -->
-    <div :class="row">
-      <span :class="label">{{ t('output.format') }}</span>
-      <select v-model="format" :class="control" :disabled="busy">
-        <option value="flac">FLAC</option>
-        <option value="wav">WAV</option>
-      </select>
+    <!-- Several at once: the disc is read once and every format comes out of
+         that one read, so choosing a second costs no extra pass. Format names
+         are not translated, which is why no label here has an i18n key. -->
+    <div class="flex items-start gap-2">
+      <span :class="[label, 'pt-1']">{{ t('output.format') }}</span>
+
+      <ul class="min-w-0 flex-1 space-y-0.5">
+        <li v-for="entry in formats" :key="entry.id" class="flex items-center gap-2">
+          <label class="flex min-w-0 flex-1 items-center gap-2">
+            <input
+              type="checkbox"
+              class="size-3.5 shrink-0 accent-brass-500"
+              :checked="chosen.includes(entry.id)"
+              :disabled="busy"
+              @change="toggleFormat(entry.id)"
+            />
+            <span class="truncate text-[0.8125rem] text-etch-100">{{ entry.label }}</span>
+          </label>
+
+          <select
+            v-if="entry.lossy && chosen.includes(entry.id)"
+            :value="settings?.bitrates?.[entry.id] ?? entry.defaultKbps"
+            :disabled="busy"
+            class="shrink-0 rounded-xs border border-chassis-700 bg-chassis-950 px-1 py-0.5 font-mono text-[0.625rem] text-etch-400 focus:border-brass-500 focus-visible:outline-none"
+            :aria-label="t('output.bitrate', { format: entry.label })"
+            @change="
+              setBitrate(entry.id, Number(($event.target as HTMLSelectElement).value))
+            "
+          >
+            <option v-for="kbps in BITRATES" :key="kbps" :value="kbps">{{ kbps }}k</option>
+          </select>
+        </li>
+      </ul>
     </div>
+
+    <p v-if="chosen.length > 1" class="pl-[6.5rem] text-[0.625rem] leading-relaxed text-etch-600">
+      {{ t('output.perFormatFolders') }}
+    </p>
 
     <div :class="row">
       <span :class="label">{{ t('output.root') }}</span>
