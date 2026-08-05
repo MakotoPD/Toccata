@@ -166,6 +166,18 @@ pub fn from_file(path: &std::path::Path) -> Result<Option<String>, MetadataError
     )))
 }
 
+/// Pulls the image back out of a data URI, which is the shape a cover has once
+/// it has been through the interface.
+pub fn bytes_from_data_uri(uri: &str) -> Option<Vec<u8>> {
+    let payload = uri.strip_prefix("data:")?.split_once("base64,")?.1;
+    let bytes = crate::base64::decode(payload)?;
+
+    // Sniffed again on the way in, because what the interface hands back is
+    // not necessarily what was handed to it.
+    image_type(&bytes)?;
+    Some(bytes)
+}
+
 /// Sniffs the format from the leading bytes instead of trusting the header a
 /// redirect chain happened to end on.
 fn image_type(bytes: &[u8]) -> Option<&'static str> {

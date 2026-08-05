@@ -74,6 +74,7 @@ export function useRip() {
     driveId: string,
     release: ReleaseCandidate | null,
     tracks: number[],
+    cover: string | null = null,
     driveOffset = 0,
   ) {
     if (!isTauri() || running.value) {
@@ -121,6 +122,8 @@ export function useRip() {
         driveId,
         release,
         tracks,
+        // What gets embedded is the cover on screen, not a second download.
+        cover,
         options: { driveOffset },
         channel,
       })

@@ -77,7 +77,12 @@ async function ejectDisc() {
 
 async function ripDisc() {
   if (selectedId.value) {
-    await ripping.start(selectedId.value, release.draft.value, release.includedNumbers(toc.value))
+    await ripping.start(
+      selectedId.value,
+      release.draft.value,
+      release.includedNumbers(toc.value),
+      metadata.cover.value,
+    )
   }
 }
 

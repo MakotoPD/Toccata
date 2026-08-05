@@ -124,6 +124,7 @@ mod tests {
             date: Some("2020".to_owned()),
             genre: Some("Hip Hop".to_owned()),
             barcode: Some("199957731546".to_owned()),
+            track_total: 2,
             tracks: vec![track(1, "Znasz Mnie?"), track(2, "Goat/Simp")],
         }
     }

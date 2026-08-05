@@ -16,7 +16,7 @@ use tauri::{AppHandle, Manager, State};
 use toccata_core::drive::{self, DriveError, DriveInfo};
 use toccata_core::encode::Format;
 use toccata_core::metadata::artwork::{Artwork, Artworks, Query as ArtworkQuery};
-use toccata_core::metadata::cover::Covers;
+use toccata_core::metadata::cover::{self, Covers};
 use toccata_core::metadata::discogs::Discogs;
 use toccata_core::metadata::manual::Manual;
 use toccata_core::metadata::musicbrainz::MusicBrainz;
@@ -375,12 +375,14 @@ enum RipEvent {
 
 /// Rips every audio track on the disc. The heavy part runs off the async
 /// runtime, since reading a disc blocks for minutes at a time.
+#[allow(clippy::too_many_arguments)]
 #[tauri::command]
 async fn rip_disc(
     drive_id: String,
     release: Option<ReleaseCandidate>,
     // Track numbers to extract; empty means every audio track on the disc.
     tracks: Vec<u8>,
+    cover: Option<String>,
     options: Options,
     channel: Channel<RipEvent>,
     app: AppHandle,
@@ -405,9 +407,13 @@ async fn rip_disc(
 
     let (pattern, format) = (settings.pattern, settings.format);
 
+    // The cover arrives as the data URI the window is showing, so what gets
+    // embedded is what the user is looking at rather than a second download.
+    let cover = cover.as_deref().and_then(cover::bytes_from_data_uri);
+
     tauri::async_runtime::spawn_blocking(move || {
         rip_all(
-            &drive_id, &toc, release, &tracks, &options, &root, &pattern, format, &channel,
+            &drive_id, &toc, release, &tracks, &options, &root, &pattern, format, cover, &channel,
             &cancelled,
         )
     })
@@ -425,6 +431,7 @@ fn rip_all(
     root: &PathBuf,
     pattern: &str,
     format: Format,
+    cover: Option<Vec<u8>>,
     channel: &Channel<RipEvent>,
     cancelled: &AtomicBool,
 ) -> Result<(), RipError> {
@@ -434,6 +441,9 @@ fn rip_all(
     let started = SystemTime::now();
     let drive_name = handle.info().name.clone();
     let mut ripped: Vec<tag::RippedTrack> = Vec::new();
+    // Tagging waits until the last track is in, since a tag carries how many
+    // there were and that is not known while they are still being read.
+    let mut written: Vec<PathBuf> = Vec::new();
 
     let audio: Vec<u8> = toc
         .tracks
@@ -488,6 +498,7 @@ fn rip_all(
                 output.finish()?;
                 unreadable += extracted.unreadable_sectors;
 
+                written.push(file.clone());
                 ripped.push(tag::RippedTrack {
                     number,
                     file: file
@@ -529,15 +540,9 @@ fn rip_all(
         }
     }
 
-    write_artefacts(
-        toc,
-        release.as_ref(),
-        ripped,
-        root,
-        &drive_name,
-        options,
-        started,
-    )?;
+    let album = describe(toc, release.as_ref(), ripped);
+    write_tags(&album, release.as_ref(), &written, cover)?;
+    write_artefacts(toc, &album, root, &drive_name, options, started)?;
 
     let _ = channel.send(RipEvent::Done {
         folder: root.display().to_string(),
@@ -554,16 +559,13 @@ fn rip_all(
 /// on disk: a folder that has just taken tens of megabytes and then refuses two
 /// kilobytes of text has something wrong with it that the user should hear
 /// about.
-fn write_artefacts(
+fn describe(
     toc: &toccata_core::toc::Toc,
     release: Option<&ReleaseCandidate>,
     tracks: Vec<tag::RippedTrack>,
-    root: &Path,
-    drive: &str,
-    options: &Options,
-    started: SystemTime,
-) -> Result<(), RipError> {
-    let album = tag::Album {
+) -> tag::Album {
+    tag::Album {
+        track_total: toc.tracks.iter().filter(|track| track.audio).count() as u32,
         title: release
             .map(|release| release.title.clone())
             .unwrap_or_default(),
@@ -574,13 +576,53 @@ fn write_artefacts(
         genre: release.and_then(|release| release.genre.clone()),
         barcode: release.and_then(|release| release.barcode.clone()),
         tracks,
+    }
+}
+
+/// Puts the metadata inside the audio files themselves, which is the only
+/// place most players ever look.
+///
+/// A file that will not take tags does not fail the rip. The audio is correct
+/// and on disk; a missing tag is something the user can fix, and throwing the
+/// rip away over it would not be a kindness.
+fn write_tags(
+    album: &tag::Album,
+    release: Option<&ReleaseCandidate>,
+    files: &[PathBuf],
+    cover: Option<Vec<u8>>,
+) -> Result<(), RipError> {
+    let extras = tag::write::Extras {
+        composer: release.and_then(|release| release.composer.as_deref()),
+        comment: release.and_then(|release| release.comment.as_deref()),
+        compilation: release.is_some_and(|release| release.compilation),
+        disc_number: release.map_or(0, |release| release.disc_number),
+        disc_total: release.and_then(|release| release.disc_total),
+        cover: cover.as_deref(),
+        musicbrainz_release_id: release
+            .filter(|release| release.source_id == SourceId::MusicBrainz)
+            .map(|release| release.id.as_str()),
     };
 
+    for (path, track) in files.iter().zip(&album.tracks) {
+        let _ = tag::write::track(path, album, track, &extras);
+    }
+
+    Ok(())
+}
+
+fn write_artefacts(
+    toc: &toccata_core::toc::Toc,
+    album: &tag::Album,
+    root: &Path,
+    drive: &str,
+    options: &Options,
+    started: SystemTime,
+) -> Result<(), RipError> {
     let disc_id = toc.musicbrainz_disc_id();
     let freedb_id = toc.freedb_id();
     let base = naming::release_folder(&album.artist, &album.title, &disc_id);
 
-    fs::write(root.join(format!("{base}.cue")), tag::cue::sheet(&album))
+    fs::write(root.join(format!("{base}.cue")), tag::cue::sheet(album))
         .map_err(|_| RipError::Write)?;
 
     let conditions = tag::log::Conditions {
@@ -593,7 +635,7 @@ fn write_artefacts(
 
     fs::write(
         root.join(format!("{base}.log")),
-        tag::log::write(&conditions, &album),
+        tag::log::write(&conditions, album),
     )
     .map_err(|_| RipError::Write)?;
 

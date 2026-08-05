@@ -7,6 +7,7 @@
 
 pub mod cue;
 pub mod log;
+pub mod write;
 
 /// One track as it came off the disc, named by the file it was written to.
 #[derive(Debug, Clone)]
@@ -34,6 +35,11 @@ pub struct Album {
     pub genre: Option<String>,
     /// Media catalogue number, which on a commercial disc is the barcode.
     pub barcode: Option<String>,
+
+    /// Audio tracks on the disc, which is not the same as the number ripped:
+    /// a tag saying "6 of 1" because only one track was wanted is worse than
+    /// no tag at all.
+    pub track_total: u32,
     pub tracks: Vec<RippedTrack>,
 }
 

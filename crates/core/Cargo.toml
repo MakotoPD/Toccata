@@ -7,6 +7,7 @@ license.workspace = true
 
 [dependencies]
 ffmpeg-next = { version = "9.0.0", default-features = false, features = ["codec", "format", "software-resampling"] }
+lofty = "0.24.0"
 # Platform TLS on purpose, and note that reqwest's `default-tls` no longer
 # means that: since 0.13 it resolves to rustls with aws-lc-sys, which needs a C
 # toolchain plus CMake and NASM to build. Schannel, Security.framework and the
