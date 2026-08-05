@@ -26,7 +26,34 @@ jobs:
             libxdo-dev \
             libssl-dev \
             libayatana-appindicator3-dev \
-            librsvg2-dev
+            librsvg2-dev \
+            libavcodec-dev \
+            libavformat-dev \
+            libavutil-dev \
+            libswresample-dev \
+            libclang-dev
+
+      - name: Install macOS system dependencies
+        if: matrix.os == 'macos-latest'
+        run: brew install ffmpeg pkg-config
+
+      # Windows has no package manager carrying FFmpeg development files, so
+      # the build takes a prebuilt one. GPL rather than LGPL because the
+      # application is GPL anyway, and this variant carries libmp3lame and
+      # libvorbis without any nonfree component.
+      - name: Install Windows system dependencies
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          choco install llvm -y --no-progress
+          "LIBCLANG_PATH=C:\Program Files\LLVM\bin" >> $env:GITHUB_ENV
+
+          $url = 'https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-n8.1-latest-win64-gpl-shared-8.1.zip'
+          Invoke-WebRequest -Uri $url -OutFile ffmpeg.zip
+          Expand-Archive -Path ffmpeg.zip -DestinationPath $env:RUNNER_TEMP
+          $dir = "$env:RUNNER_TEMP\ffmpeg-n8.1-latest-win64-gpl-shared-8.1"
+          "FFMPEG_DIR=$dir" >> $env:GITHUB_ENV
+          "$dir\bin" >> $env:GITHUB_PATH
 
       - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v7

@@ -13,11 +13,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use serde::{Deserialize, Serialize};
 
-use crate::drive::{BYTES_PER_SECTOR, Drive, DriveError, SAMPLES_PER_SECTOR};
+use crate::drive::{BYTES_PER_SAMPLE, BYTES_PER_SECTOR, Drive, DriveError, SAMPLES_PER_SECTOR};
 use crate::toc::Toc;
-
-/// Bytes in one stereo sample frame: two channels of 16 bit.
-const BYTES_PER_SAMPLE: usize = 4;
 
 /// A CD holds seventy five sectors of audio per second.
 pub const SECTORS_PER_SECOND: u32 = 75;

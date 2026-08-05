@@ -88,6 +88,9 @@ pub const BYTES_PER_SECTOR: usize = 2352;
 /// Stereo sample frames in one audio sector.
 pub const SAMPLES_PER_SECTOR: u32 = 588;
 
+/// Bytes in one stereo sample frame: two channels of 16 bit.
+pub const BYTES_PER_SAMPLE: usize = 4;
+
 pub trait Drive {
     fn info(&self) -> &DriveInfo;
 

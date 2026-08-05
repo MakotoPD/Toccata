@@ -6,6 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 
 [dependencies]
+ffmpeg-next = { version = "9.0.0", default-features = false, features = ["codec", "format", "software-resampling"] }
 # Platform TLS on purpose, and note that reqwest's `default-tls` no longer
 # means that: since 0.13 it resolves to rustls with aws-lc-sys, which needs a C
 # toolchain plus CMake and NASM to build. Schannel, Security.framework and the
@@ -16,7 +17,10 @@ serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"
 sha1 = "0.11.0"
 thiserror = "2.0.19"
-tokio = { version = "1.53.1", features = ["time"] }
+# `macros` is for `join!`, which the artwork search uses. Without it the crate
+# only builds when something else in the workspace happens to switch the
+# feature on, which is not a dependency, it is a coincidence.
+tokio = { version = "1.53.1", features = ["macros", "time"] }
 
 [target."cfg(windows)".dependencies]
 windows = { version = "0.62.2", features = ["Win32_Devices_Cdrom", "Win32_Foundation", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_IO", "Win32_System_Ioctl", "Win32_System_WindowsProgramming"] }

@@ -43,6 +43,8 @@ whole is GPL. This rules out a permissive license.
 | tauri-plugin-opener, @tauri-apps/plugin-opener | Apache-2.0 OR MIT |
 | sha1 | MIT OR Apache-2.0 |
 | thiserror | MIT OR Apache-2.0 |
+| ffmpeg-next, ffmpeg-sys-next | WTFPL |
+| FFmpeg itself (linked, not vendored) | GPL-3.0-or-later as built here |
 | windows (Windows only) | Apache-2.0 OR MIT |
 | libc (Linux and macOS only) | MIT OR Apache-2.0 |
 | tokio | MIT |
@@ -57,6 +59,14 @@ whole is GPL. This rules out a permissive license.
 HTTPS goes through the platform TLS stack, so Linux builds link the system
 OpenSSL. Windows and macOS use schannel and Security.framework and need
 nothing extra.
+
+FFmpeg is linked, not bundled into this repository. Its license depends on how
+it was configured: an LGPL build stays LGPL, and a build with `--enable-gpl` is
+GPL. Either is fine here, since the application is GPL regardless. What is not
+fine is `--enable-nonfree`, which makes the result non-redistributable; a build
+carrying it, or `fdk-aac`, must not be used. `libmp3lame` and `libvorbis` are
+required, the first for MP3 and the second because FFmpeg's own Vorbis encoder
+is audibly worse.
 
 Native libraries linked later in development (`libcdio-paranoia`, FFmpeg) are
 listed here once they are wired in.
