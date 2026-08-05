@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
-use crate::encode::Format;
+use crate::encode::{Format, Quality};
 use crate::naming::template;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -31,10 +31,10 @@ pub struct Settings {
     #[serde(default = "default_formats")]
     pub formats: Vec<Format>,
 
-    /// Bit rate in kbps for the formats where that means anything. Absent
-    /// entries fall back to the format's own default.
+    /// What each format was tuned to. Absent entries fall back to the
+    /// format's own default, which is what most of them will always use.
     #[serde(default)]
-    pub bitrates: std::collections::HashMap<Format, u32>,
+    pub qualities: std::collections::HashMap<Format, Quality>,
 
     /// Read offset of the drive in samples, EAC convention, per drive so that
     /// swapping drives does not silently ruin a rip.
@@ -56,7 +56,7 @@ impl Default for Settings {
             output_root: None,
             pattern: default_pattern(),
             formats: default_formats(),
-            bitrates: std::collections::HashMap::new(),
+            qualities: std::collections::HashMap::new(),
             drive_offsets: std::collections::HashMap::new(),
         }
     }

@@ -4,6 +4,8 @@ import type { ReleaseCandidate } from '~/types/disc'
 const props = defineProps<{
   /** Number of the row the table has selected, or nothing for the release. */
   selected: number | null
+  /** A rip in progress: settings that would change its output are held still. */
+  busy: boolean
 }>()
 
 const release = defineModel<ReleaseCandidate>({ required: true })
@@ -65,12 +67,7 @@ const tabs = [
         </div>
       </template>
 
-      <template v-else>
-        <p class="mb-3 text-[0.625rem] uppercase tracking-[0.16em] text-etch-600">WAV</p>
-        <p class="text-[0.6875rem] leading-relaxed text-etch-400">
-          {{ t('panel.encoderNone') }}
-        </p>
-      </template>
+      <EncoderSettings v-else :busy="busy" />
     </div>
   </section>
 </template>

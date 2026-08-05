@@ -144,6 +144,54 @@ pub enum Format {
     Ape,
 }
 
+/// What a format lets the user decide, and therefore what the encoder panel
+/// puts on screen. Described here rather than in the interface so that adding
+/// a format never means editing two places.
+#[derive(Debug, Clone, Copy, Serialize)]
+#[serde(
+    tag = "kind",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum Tuning {
+    /// Nothing to decide: the samples are written exactly as the disc holds
+    /// them, and any knob here would only be a way of making them worse.
+    Untouched,
+
+    /// How hard a lossless codec works. Higher is smaller and slower, and
+    /// never costs a single sample.
+    Compression { max: u32, default: u32 },
+
+    /// A lossy codec, where the choice is between a fixed rate and the codec's
+    /// own variable scale. `max_quality` of zero means it has no such scale.
+    Lossy {
+        default_kbps: u32,
+        max_quality: u32,
+        default_quality: u32,
+    },
+}
+
+/// What the user chose for one format.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(
+    tag = "mode",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum Quality {
+    Compression {
+        level: u32,
+    },
+    Bitrate {
+        kbps: u32,
+    },
+    /// The codec's own scale, where a higher number is better and the rate
+    /// follows the music rather than the clock.
+    Variable {
+        quality: u32,
+    },
+}
+
 /// Every format, in the order the interface lists them.
 pub const ALL: &[Format] = &[
     Format::Flac,
@@ -211,18 +259,53 @@ impl Format {
         }
     }
 
-    /// Bit rate a lossy format is written at unless the settings say otherwise.
-    pub fn default_kbps(self) -> Option<u32> {
+    /// What this format lets the user decide.
+    pub fn tuning(self) -> Tuning {
         match self {
-            Self::Mp3 => Some(320),
-            Self::M4aAac | Self::Aac => Some(256),
-            Self::OggVorbis => Some(192),
-            _ => None,
+            // Twelve costs nothing here: the drive is tens of times slower
+            // than any of these levels, so the wall clock never notices.
+            Self::Flac => Tuning::Compression {
+                max: 12,
+                default: 12,
+            },
+            #[cfg(feature = "ape")]
+            Self::Ape => Tuning::Compression { max: 5, default: 2 },
+
+            // LAME's scale runs the other way round, so it is turned here and
+            // the interface only ever sees "higher is better".
+            Self::Mp3 => Tuning::Lossy {
+                default_kbps: 320,
+                max_quality: 9,
+                default_quality: 7,
+            },
+            Self::OggVorbis => Tuning::Lossy {
+                default_kbps: 192,
+                max_quality: 10,
+                default_quality: 6,
+            },
+            // FFmpeg's own AAC encoder has a variable mode that its authors
+            // call experimental, so only the fixed rate is offered.
+            Self::M4aAac | Self::Aac => Tuning::Lossy {
+                default_kbps: 256,
+                max_quality: 0,
+                default_quality: 0,
+            },
+
+            Self::Wav | Self::Aiff | Self::M4a => Tuning::Untouched,
         }
     }
 
-    fn spec(self, kbps: Option<u32>) -> Option<ffmpeg::Spec> {
-        let kbps = kbps.or_else(|| self.default_kbps());
+    /// What the format falls back to when the settings say nothing.
+    pub fn default_quality(self) -> Option<Quality> {
+        match self.tuning() {
+            Tuning::Untouched => None,
+            Tuning::Compression { default, .. } => Some(Quality::Compression { level: default }),
+            Tuning::Lossy { default_kbps, .. } => Some(Quality::Bitrate { kbps: default_kbps }),
+        }
+    }
+
+    fn spec(self, quality: Option<Quality>) -> Option<ffmpeg::Spec> {
+        let quality = quality.or_else(|| self.default_quality());
 
         // `libvorbis` and `libmp3lame` are asked for by name because FFmpeg
         // also carries its own encoders for both codecs, and both are worse.
@@ -242,7 +325,10 @@ impl Format {
         Some(ffmpeg::Spec {
             encoder,
             muxer,
-            kbps: self.lossy().then_some(kbps).flatten(),
+            quality,
+            // LAME counts down from 0 while everything else counts up, so the
+            // interface's scale is turned round here rather than in the panel.
+            invert_quality: self == Self::Mp3,
         })
     }
 
@@ -250,13 +336,14 @@ impl Format {
         self.create_with(path, None)
     }
 
-    /// `kbps` is only looked at by the lossy formats; the rest ignore it.
+    /// Falls back to the format's own default when `quality` says nothing, or
+    /// says something the format has no use for.
     pub fn create_with(
         self,
         path: &std::path::Path,
-        kbps: Option<u32>,
+        quality: Option<Quality>,
     ) -> Result<Box<dyn Encoder>, EncodeError> {
-        match self.spec(kbps) {
+        match self.spec(quality) {
             Some(spec) => Ok(Box::new(ffmpeg::Coder::create(path, &spec)?)),
             #[cfg(feature = "ape")]
             None if self == Self::Ape => Ok(Box::new(ape::Ape::create(path)?)),
@@ -455,6 +542,105 @@ mod tests {
                 format.label()
             );
         }
+    }
+
+    // The knobs have to actually reach the codec. A compression level that is
+    // quietly ignored looks exactly like one that works.
+    #[test]
+    fn compression_level_changes_the_size_without_changing_the_audio() {
+        let pcm = tone(2);
+
+        let sizes: Vec<u64> = [0, 12]
+            .into_iter()
+            .map(|level| {
+                let path = std::env::temp_dir().join(format!("toccata-level-{level}.flac"));
+                let _ = std::fs::remove_file(&path);
+
+                let mut encoder = Format::Flac
+                    .create_with(&path, Some(Quality::Compression { level }))
+                    .expect("the encoder opens");
+
+                encoder.write_all(&pcm).expect("the audio is taken");
+                encoder.finish().expect("the file is finished");
+
+                assert_eq!(decode(&path), pcm, "level {level} is still lossless");
+
+                let size = std::fs::metadata(&path).expect("the file exists").len();
+                let _ = std::fs::remove_file(&path);
+                size
+            })
+            .collect();
+
+        assert!(
+            sizes[1] < sizes[0],
+            "level 12 should beat level 0, got {} against {}",
+            sizes[1],
+            sizes[0]
+        );
+    }
+
+    #[test]
+    fn a_lossy_format_follows_the_bit_rate_it_was_given() {
+        let pcm = tone(4);
+
+        let sizes: Vec<u64> = [128, 320]
+            .into_iter()
+            .map(|kbps| {
+                let path = std::env::temp_dir().join(format!("toccata-rate-{kbps}.mp3"));
+                let _ = std::fs::remove_file(&path);
+
+                let mut encoder = Format::Mp3
+                    .create_with(&path, Some(Quality::Bitrate { kbps }))
+                    .expect("the encoder opens");
+
+                encoder.write_all(&pcm).expect("the audio is taken");
+                encoder.finish().expect("the file is finished");
+
+                let size = std::fs::metadata(&path).expect("the file exists").len();
+                let _ = std::fs::remove_file(&path);
+                size
+            })
+            .collect();
+
+        assert!(
+            sizes[1] > sizes[0] * 2,
+            "320k should be far larger than 128k, got {} against {}",
+            sizes[1],
+            sizes[0]
+        );
+    }
+
+    // Variable rate goes in through the codec context's options rather than a
+    // setter, so it is the setting most likely to be silently ignored.
+    #[test]
+    fn variable_quality_reaches_the_codec() {
+        let pcm = tone(4);
+
+        let sizes: Vec<u64> = [0, 9]
+            .into_iter()
+            .map(|quality| {
+                let path = std::env::temp_dir().join(format!("toccata-vbr-{quality}.mp3"));
+                let _ = std::fs::remove_file(&path);
+
+                let mut encoder = Format::Mp3
+                    .create_with(&path, Some(Quality::Variable { quality }))
+                    .expect("the encoder opens");
+
+                encoder.write_all(&pcm).expect("the audio is taken");
+                encoder.finish().expect("the file is finished");
+
+                let size = std::fs::metadata(&path).expect("the file exists").len();
+                let _ = std::fs::remove_file(&path);
+                size
+            })
+            .collect();
+
+        assert!(
+            sizes[1] > sizes[0],
+            "quality 9 should be larger than quality 0, got {} against {}",
+            sizes[1],
+            sizes[0]
+        );
     }
 
     fn codec_of(path: &std::path::Path) -> ffmpeg_next::codec::Id {

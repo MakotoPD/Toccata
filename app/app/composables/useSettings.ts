@@ -1,7 +1,7 @@
 import { invoke, isTauri } from '@tauri-apps/api/core'
 import { open } from '@tauri-apps/plugin-dialog'
 
-import type { Format, FormatInfo, Settings } from '~/types/disc'
+import type { Format, FormatInfo, Quality, Settings } from '~/types/disc'
 
 /**
  * What the user has decided, kept between runs. Saved as soon as it changes,
@@ -38,8 +38,30 @@ export function useSettings() {
     }
   }
 
-  async function setBitrate(format: Format, kbps: number) {
-    await save({ bitrates: { ...settings.value?.bitrates, [format]: kbps } })
+  /** Replaces the whole selection, which is what the single picker does. */
+  async function chooseFormat(format: Format) {
+    await save({ formats: [format] })
+  }
+
+  async function setQuality(format: Format, quality: Quality) {
+    await save({ qualities: { ...settings.value?.qualities, [format]: quality } })
+  }
+
+  /** What a format is set to, falling back to what the backend says it uses. */
+  function qualityOf(info: FormatInfo): Quality | null {
+    const stored = settings.value?.qualities?.[info.id]
+    if (stored) {
+      return stored
+    }
+
+    switch (info.tuning.kind) {
+      case 'compression':
+        return { mode: 'compression', level: info.tuning.default }
+      case 'lossy':
+        return { mode: 'bitrate', kbps: info.tuning.defaultKbps }
+      default:
+        return null
+    }
   }
 
   async function save(next: Partial<Settings>) {
@@ -76,7 +98,9 @@ export function useSettings() {
     load,
     save,
     toggleFormat,
-    setBitrate,
+    chooseFormat,
+    setQuality,
+    qualityOf,
     chooseRoot,
     clearRoot,
   }

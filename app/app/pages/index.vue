@@ -243,6 +243,7 @@ const loud = `${action} border-brass-500 bg-brass-500/10 text-brass-400 hover:bg
         v-if="release.draft.value"
         v-model="release.draft.value"
         :selected="release.selected.value"
+        :busy="ripping.running.value"
       />
 
       <div v-else class="flex flex-1 items-center justify-center px-6">

@@ -41,9 +41,14 @@ pub struct Spec {
     /// Muxer name, forced rather than guessed: `.m4a` holds either ALAC or
     /// AAC, and the extension cannot say which.
     pub muxer: &'static str,
-    /// Bit rate in kbps, for the formats where that means anything.
-    pub kbps: Option<u32>,
+    /// What the user asked for, if the format has anything to ask about.
+    pub quality: Option<super::Quality>,
+    /// Set for codecs whose own quality scale runs downwards.
+    pub invert_quality: bool,
 }
+
+/// What ffmpeg multiplies a quality number by before the codec sees it.
+const QP2LAMBDA: u32 = 118;
 
 pub struct Coder {
     output: format::context::Output,
@@ -105,16 +110,35 @@ impl Coder {
             encoder.set_time_base((1, SAMPLE_RATE));
             stream.set_time_base((1, SAMPLE_RATE));
 
-            if let Some(kbps) = spec.kbps {
-                encoder.set_bit_rate(kbps as usize * 1000);
-            }
-
             if global_header {
                 encoder.set_flags(codec::flag::Flags::GLOBAL_HEADER);
             }
 
+            let mut options = ffmpeg::Dictionary::new();
+
+            match spec.quality {
+                Some(super::Quality::Bitrate { kbps }) => {
+                    encoder.set_bit_rate(kbps as usize * 1000);
+                }
+                Some(super::Quality::Compression { level }) => {
+                    options.set("compression_level", &level.to_string());
+                }
+                // Variable rate goes through the codec context's own options
+                // rather than a setter, since that is where ffmpeg keeps it.
+                Some(super::Quality::Variable { quality }) => {
+                    let scale = match spec.invert_quality {
+                        true => 9u32.saturating_sub(quality),
+                        false => quality,
+                    };
+
+                    options.set("flags", "+qscale");
+                    options.set("global_quality", &(scale * QP2LAMBDA).to_string());
+                }
+                None => {}
+            }
+
             let encoder = encoder
-                .open_as(codec)
+                .open_as_with(codec, options)
                 .map_err(EncodeError::during("openEncoder"))?;
 
             stream.set_parameters(&encoder);

@@ -242,7 +242,9 @@ struct FormatInfo {
     label: &'static str,
     extension: &'static str,
     lossy: bool,
-    default_kbps: Option<u32>,
+    /// What the encoder panel offers for this format, so the panel itself
+    /// holds no knowledge of any particular codec.
+    tuning: encode::Tuning,
 }
 
 #[tauri::command]
@@ -254,7 +256,7 @@ fn formats() -> Vec<FormatInfo> {
             label: format.label(),
             extension: format.extension(),
             lossy: format.lossy(),
-            default_kbps: format.default_kbps(),
+            tuning: format.tuning(),
         })
         .collect()
 }
@@ -433,10 +435,10 @@ async fn rip_disc(
         .clone();
 
     let pattern = settings.pattern;
-    let formats: Vec<(Format, Option<u32>)> = settings
+    let formats: Vec<(Format, Option<encode::Quality>)> = settings
         .formats
         .iter()
-        .map(|format| (*format, settings.bitrates.get(format).copied()))
+        .map(|format| (*format, settings.qualities.get(format).copied()))
         .collect();
 
     // The cover arrives as the data URI the window is showing, so what gets
@@ -462,7 +464,7 @@ fn rip_all(
     options: &Options,
     root: &Path,
     pattern: &str,
-    formats: &[(Format, Option<u32>)],
+    formats: &[(Format, Option<encode::Quality>)],
     cover: Option<Vec<u8>>,
     channel: &Channel<RipEvent>,
     cancelled: &AtomicBool,
@@ -530,7 +532,7 @@ fn rip_all(
             formats
                 .iter()
                 .zip(&files)
-                .map(|((format, kbps), file)| format.create_with(file, *kbps))
+                .map(|((format, quality), file)| format.create_with(file, *quality))
                 .collect::<Result<Vec<_>, _>>()?,
         );
         let outcome = rip::track(

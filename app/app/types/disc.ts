@@ -135,6 +135,12 @@ export type Format =
   | 'oggVorbis'
   | 'ape'
 
+/** What a format lets the user decide, and so what the encoder tab shows. */
+export type Tuning =
+  | { kind: 'untouched' }
+  | { kind: 'compression'; max: number; default: number }
+  | { kind: 'lossy'; defaultKbps: number; maxQuality: number; defaultQuality: number }
+
 /** Described by the backend, so the list can never offer what it cannot write. */
 export interface FormatInfo {
   id: Format
@@ -142,8 +148,13 @@ export interface FormatInfo {
   label: string
   extension: string
   lossy: boolean
-  defaultKbps: number | null
+  tuning: Tuning
 }
+
+export type Quality =
+  | { mode: 'compression'; level: number }
+  | { mode: 'bitrate'; kbps: number }
+  | { mode: 'variable'; quality: number }
 
 export interface Settings {
   /** Null means the system music folder, resolved by the backend. */
@@ -152,7 +163,7 @@ export interface Settings {
   pattern: string
   /** Several at once: the disc is read once and every format comes out of it. */
   formats: Format[]
-  /** Only the lossy formats look at this; the rest ignore it. */
-  bitrates: Partial<Record<Format, number>>
+  /** Absent entries fall back to the format's own default. */
+  qualities: Partial<Record<Format, Quality>>
   driveOffsets: Record<string, number>
 }

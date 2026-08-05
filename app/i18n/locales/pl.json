@@ -140,16 +140,33 @@
     "rootDefault": "systemowy folder muzyki",
     "browse": "Wybierz",
     "reset": "Domyślny",
-    "bitrate": "Bitrate dla {format}",
-    "perFormatFolders": "Każdy format trafia do własnego folderu, bo dwa z nich mają to samo rozszerzenie .m4a."
+    "multi": "[Kilka formatów]",
+    "perFormatFolders": "Wybierasz je w zakładce Enkoder. Każdy trafia do własnego folderu, bo dwa z nich mają to samo rozszerzenie .m4a."
   },
   "panel": {
     "tags": "Tagi",
     "encoder": "Enkoder",
     "forRelease": "Cała płyta",
     "forTrack": "Ścieżka {number}",
-    "hint": "Zaznacz ścieżkę na liście, żeby edytować ją osobno.",
-    "encoderNone": "Formaty bezstratne zachowują każdą próbkę i zapisujemy je z najlepszą kompresją, jaką daje ich kodek, więc nie ma tu czego wybierać. Stratne mają bitrate obok samego formatu."
+    "hint": "Zaznacz ścieżkę na liście, żeby edytować ją osobno."
+  },
+  "encoder": {
+    "formats": "Formaty",
+    "settingsOf": "Ustawienia enkodera {format}",
+    "compression": "Kompresja",
+    "level": "Poziom {level}",
+    "recommended": "zalecany",
+    "compressionHint": "Każdy poziom zachowuje wszystkie próbki. Wyższy tylko dłużej liczy i daje mniejszy plik, a napęd i tak jest wolniejszy od każdego z nich.",
+    "mode": "Tryb",
+    "variable": "Zmienny",
+    "constant": "Stały",
+    "quality": "Jakość",
+    "bitrate": "Bitrate",
+    "bitDepth": "Rozdzielczość",
+    "sampleRate": "Częstotliwość",
+    "channels": "Kanały",
+    "asDisc": "tak jak na płycie",
+    "untouchedHint": "Próbki zapisujemy dokładnie tak, jak zeszły z płyty. Konwersja czegokolwiek z tego zrobiłaby kopię mniej wierną niż oryginał."
   },
   "cover": {
     "none": "Brak okładki",

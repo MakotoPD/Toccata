@@ -140,16 +140,33 @@
     "rootDefault": "system music folder",
     "browse": "Browse",
     "reset": "Default",
-    "bitrate": "Bit rate for {format}",
-    "perFormatFolders": "Each format goes into a folder of its own, since two of them share the .m4a extension."
+    "multi": "[Several formats]",
+    "perFormatFolders": "Chosen under Encoder. Each goes into a folder of its own, since two of them share the .m4a extension."
   },
   "panel": {
     "tags": "Tags",
     "encoder": "Encoder",
     "forRelease": "Whole disc",
     "forTrack": "Track {number}",
-    "hint": "Pick a track in the list to edit that one instead.",
-    "encoderNone": "The lossless formats keep every sample and are written at the best compression their codec offers, so there is nothing to decide. The lossy ones carry their bit rate next to the format itself."
+    "hint": "Pick a track in the list to edit that one instead."
+  },
+  "encoder": {
+    "formats": "Formats",
+    "settingsOf": "{format} encoder settings",
+    "compression": "Compression",
+    "level": "Level {level}",
+    "recommended": "recommended",
+    "compressionHint": "Every level keeps every sample. A higher one only takes longer and produces a smaller file, and the drive is slower than any of them.",
+    "mode": "Rate",
+    "variable": "Variable",
+    "constant": "Constant",
+    "quality": "Quality",
+    "bitrate": "Bit rate",
+    "bitDepth": "Bit depth",
+    "sampleRate": "Sample rate",
+    "channels": "Channels",
+    "asDisc": "as the disc holds it",
+    "untouchedHint": "The samples are written exactly as they came off the disc. Converting any of this would only make the copy less faithful than the original."
   },
   "cover": {
     "none": "No cover",
