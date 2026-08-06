@@ -2,21 +2,116 @@ name: Release
 
 on:
   push:
-    tags: ['v*']
+    branches:
+      - main
   workflow_dispatch:
 
-# Only the platforms whose bundle carries everything it needs. A Windows
-# installer brings the FFmpeg libraries with it and fetches WebView2 by
-# itself, and linuxdeploy copies the linked libraries into an AppImage.
-#
-# macOS is absent on purpose: a .app built here links Homebrew's FFmpeg by
-# absolute path, so it would run only on machines that already had FFmpeg
-# installed. Adding it means the @rpath and install_name_tool work first,
-# otherwise the download is broken for exactly the people it is aimed at.
 jobs:
+  # Read the version from tauri.conf.json and only continue if that version
+  # hasn't been released yet, so ordinary pushes to main don't spam releases.
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      should_release: ${{ steps.check.outputs.should_release }}
+      body: ${{ steps.notes.outputs.body }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Read version from tauri.conf.json
+        id: version
+        run: |
+          VERSION=$(node -p "require('./src-tauri/tauri.conf.json').version")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Detected version: v$VERSION"
+
+      - name: Check whether tag already exists
+        id: check
+        run: |
+          TAG="v${{ steps.version.outputs.version }}"
+          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG already exists — skipping release."
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Tag $TAG is new — proceeding with release."
+            echo "should_release=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Generate release notes
+        id: notes
+        if: steps.check.outputs.should_release == 'true'
+        shell: bash
+        run: |
+          VERSION="v${{ steps.version.outputs.version }}"
+          NUMBER="${{ steps.version.outputs.version }}"
+          BASE="https://github.com/${{ github.repository }}/releases/download/${VERSION}"
+
+          # Notes written by hand win, when release.txt carries a block for
+          # this version. Without one the commit log stands in, which is worth
+          # having because every commit here is a Conventional Commit.
+          CHANGELOG=""
+          if [ -f release.txt ]; then
+            CHANGELOG=$(awk "/^## Changes \(${VERSION}\)/{flag=1; next} /^## Changes \(v[0-9]/{if(flag) exit} flag" release.txt)
+          fi
+
+          if [ -z "$CHANGELOG" ]; then
+            PREVIOUS=$(git tag --list 'v*' --sort=-v:refname | head -1)
+            RANGE="${PREVIOUS:+${PREVIOUS}..}HEAD"
+            CHANGELOG=$(
+              for entry in "feat:New" "fix:Fixed" "perf:Faster" "docs:Documentation"; do
+                TYPE="${entry%%:*}"
+                HEADING="${entry##*:}"
+                SUBJECTS=$(git log --no-merges --format='%s' "$RANGE" \
+                  -E --grep="^${TYPE}(\([^)]*\))?!?: " |
+                  sed -E "s/^${TYPE}(\([^)]*\))?!?: //")
+                [ -z "$SUBJECTS" ] && continue
+                printf '### %s\n\n' "$HEADING"
+                printf '%s\n' "$SUBJECTS" | while IFS= read -r line; do
+                  printf -- '- %s\n' "$line"
+                done
+                printf '\n'
+              done
+            )
+          fi
+
+          [ -z "$CHANGELOG" ] && CHANGELOG="First release."
+
+          {
+            echo "## 📥 Downloads"
+            echo ""
+            echo "Nothing else to install — no runtime, no codec pack, no FFmpeg."
+            echo ""
+            echo "| Platform | Architecture | Download |"
+            echo "|----------|-------------|----------|"
+            echo "| 🪟 Windows | x64 | [Toccata_${NUMBER}_x64-setup.exe](${BASE}/Toccata_${NUMBER}_x64-setup.exe) |"
+            echo "| 🐧 Linux | x64 (AppImage) | [Toccata_${NUMBER}_amd64.AppImage](${BASE}/Toccata_${NUMBER}_amd64.AppImage) |"
+            echo ""
+            echo "macOS has no download yet: a bundle built today expects Homebrew's FFmpeg to be installed rather than carrying its own. Build from source in the meantime."
+            echo ""
+            echo "---"
+            echo ""
+            echo "## 📝 What's Changed"
+            echo ""
+            echo "$CHANGELOG"
+          } > release_body.md
+
+          {
+            echo "body<<RELEASE_EOF"
+            cat release_body.md
+            echo "RELEASE_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+  # Only the platforms whose bundle carries everything it needs. A Windows
+  # installer brings the FFmpeg libraries with it and fetches WebView2 by
+  # itself, and linuxdeploy copies the linked libraries into an AppImage.
+  # A .deb would need its FFmpeg dependencies declared by hand to install
+  # cleanly, and a macOS .app needs the @rpath work first.
   release:
-    name: ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
+    needs: prepare
+    if: needs.prepare.outputs.should_release == 'true'
     permissions:
       contents: write
 
@@ -24,16 +119,20 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: windows-latest
-            args: --bundles nsis
-          - os: ubuntu-latest
-            args: --bundles appimage
+          - platform: 'windows-latest'
+            args: '--bundles nsis'
+          - platform: 'ubuntu-latest'
+            args: '--bundles appimage'
 
+    runs-on: ${{ matrix.platform }}
     steps:
-      - uses: actions/checkout@v7
+      - name: Checkout repository
+        uses: actions/checkout@v7
 
+      # patchelf and libfuse2 are what the AppImage bundler itself needs; the
+      # rest is Tauri's webview and the FFmpeg headers.
       - name: Install Linux system dependencies
-        if: matrix.os == 'ubuntu-latest'
+        if: matrix.platform == 'ubuntu-latest'
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -46,10 +145,17 @@ jobs:
             libavformat-dev \
             libavutil-dev \
             libswresample-dev \
-            libclang-dev
+            libclang-dev \
+            patchelf \
+            libfuse2 \
+            file
 
+      # Windows has no package manager carrying FFmpeg development files, so
+      # the build takes a prebuilt one. GPL rather than LGPL because the
+      # application is GPL anyway, and this variant carries libmp3lame and
+      # libvorbis without any nonfree component.
       - name: Install Windows system dependencies
-        if: matrix.os == 'windows-latest'
+        if: matrix.platform == 'windows-latest'
         shell: pwsh
         run: |
           choco install llvm -y --no-progress
@@ -62,31 +168,32 @@ jobs:
           "FFMPEG_DIR=$dir" >> $env:GITHUB_ENV
           "$dir\bin" >> $env:GITHUB_PATH
 
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v7
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
         with:
           node-version: 24
-          cache: pnpm
+          cache: 'pnpm'
 
-      - run: pnpm install --frozen-lockfile
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
 
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
 
-      - uses: tauri-apps/tauri-action@v1
+      - name: Install frontend dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build and release
+        uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tagName: ${{ github.ref_name }}
-          releaseName: Toccata ${{ github.ref_name }}
-          releaseBody: |
-            Put an audio CD in the drive and Toccata does the rest.
-
-            **Windows** — download the `-setup.exe` and run it. Nothing else
-            to install.
-
-            **Linux** — download the `.AppImage`, make it executable and run
-            it. Reading a drive needs membership of the `cdrom` or `optical`
-            group.
+          tagName: v${{ needs.prepare.outputs.version }}
+          releaseName: 'Toccata v${{ needs.prepare.outputs.version }}'
+          releaseBody: ${{ needs.prepare.outputs.body }}
           releaseDraft: true
+          prerelease: false
           args: ${{ matrix.args }}
