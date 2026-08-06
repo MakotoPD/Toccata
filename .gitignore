@@ -24,3 +24,6 @@ docs/*
 CLAUDE.MD
 # Somebody else's FFmpeg build, fetched per machine rather than committed.
 src-tauri/ffmpeg/*.dll
+
+# Paths to this machine's FFmpeg and LLVM. See docs/BUILD.md.
+.cargo/config.toml

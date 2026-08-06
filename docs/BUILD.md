@@ -45,10 +45,22 @@ Enable pnpm with `corepack enable`, which picks up the pinned version.
   $env:PATH = "$env:FFMPEG_DIR\bin;$env:PATH"
   ```
 
-  `FFMPEG_DIR` is read while compiling; `PATH` is what lets the resulting
-  binary and the test suite find the DLLs at run time. Set both permanently
-  through *System Properties → Environment Variables* to avoid repeating this
-  per shell.
+  Rather than repeating that in every shell, put it in `.cargo/config.toml` at
+  the root of the checkout, which Cargo reads for every build no matter which
+  window it was started from:
+
+  ```toml
+  # Single quotes on purpose: a basic string reads every backslash as an escape.
+  [env]
+  FFMPEG_DIR = 'C:\path\to\ffmpeg-n8.1-latest-win64-gpl-shared-8.1'
+  LIBCLANG_PATH = 'C:\Program Files\LLVM\bin'
+  ```
+
+  That file is not committed: it holds paths belonging to one computer. With it
+  in place `pnpm tauri dev` works from anywhere, because the build script copies
+  the four libraries next to the executable, which is where Windows looks for
+  them. The test suite still wants them on `PATH`, since it runs from a
+  different directory.
 
 ### macOS
 
