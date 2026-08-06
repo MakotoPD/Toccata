@@ -20,6 +20,7 @@ pub mod barcode;
 pub mod cover;
 pub mod ctdb;
 pub mod discogs;
+pub mod isrc;
 pub mod manual;
 pub mod musicbrainz;
 
@@ -254,10 +255,12 @@ impl Cascade {
             // CTDB replicates MusicBrainz, Discogs and freedb and matches on a
             // fuzzy TOC, so it reaches discs an exact Disc ID misses.
             Box::new(ctdb::Ctdb::default()),
-            // Last, because most discs carry no catalogue number, but first
-            // among the sources that can reach a pressing nobody submitted a
-            // Disc ID for: the barcode comes off the disc itself.
+            // The last two read the disc rather than describe it. Most discs
+            // carry neither, but between them they reach a pressing nobody
+            // ever submitted a Disc ID for: the barcode names the pressing,
+            // and the identifiers name the recordings on it.
             Box::new(barcode::Barcode::default()),
+            Box::new(isrc::Isrc::default()),
         ])
     }
 }
