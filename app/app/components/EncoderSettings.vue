@@ -144,7 +144,7 @@ const control =
             :value="variable(info)"
             :disabled="busy"
             class="min-w-0 flex-1 accent-brass-500"
-            @input="
+            @change="
               setQuality(info.id, {
                 mode: 'variable',
                 quality: Number(($event.target as HTMLInputElement).value),

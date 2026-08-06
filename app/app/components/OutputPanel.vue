@@ -117,7 +117,15 @@ const small =
 
     <div :class="row">
       <span :class="label">{{ t('output.naming') }}</span>
-      <input v-model="pattern" type="text" :class="[control, 'font-mono text-[0.6875rem]']" />
+      <!-- Kept until the field is left rather than saved on every keystroke:
+           a pattern being typed is not a pattern, and a rip started halfway
+           through would use it. -->
+      <input
+        :value="pattern"
+        type="text"
+        :class="[control, 'font-mono text-[0.6875rem]']"
+        @change="pattern = ($event.target as HTMLInputElement).value"
+      />
     </div>
 
     <!-- The placeholders come from the backend, so the list can never drift
@@ -144,12 +152,15 @@ const small =
          rip looks perfect and matches nobody. -->
     <div :class="row">
       <span :class="label">{{ t('drive.offset') }}</span>
+      <!-- On change rather than on input: an emptied field reads as zero, and
+           a rip started at that moment would be silently uncorrected. -->
       <input
-        v-model.number="offset"
+        :value="offset"
         type="number"
         step="1"
         :disabled="busy || !driveId"
         :class="[control, 'font-mono']"
+        @change="offset = Number(($event.target as HTMLInputElement).value)"
       />
       <span class="shrink-0 text-[0.625rem] uppercase tracking-[0.14em] text-etch-600">
         {{ t('drive.samples') }}
