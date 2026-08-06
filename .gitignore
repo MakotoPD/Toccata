@@ -20,11 +20,13 @@ Thumbs.db
 .vscode/*
 !.vscode/extensions.json
 
+# Working notes and tooling configuration, not part of the published project.
 docs/
-docs/*
-CLAUDE.MD
+CLAUDE.md
+.claude/
+
 # Somebody else's FFmpeg build, fetched per machine rather than committed.
 src-tauri/ffmpeg/*.dll
 
-# Paths to this machine's FFmpeg and LLVM. See docs/BUILD.md.
+# Paths to this machine's FFmpeg and LLVM. See the README.
 .cargo/config.toml

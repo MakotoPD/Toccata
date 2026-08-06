@@ -49,7 +49,58 @@ the `ape` feature the application builds and runs, just without that format.
 
 ## Getting it
 
-There are no prebuilt downloads yet, so you build it once:
+There are no prebuilt downloads yet, so you build it once.
+
+### Toolchain
+
+| Tool | Version |
+| --- | --- |
+| Rust, stable, via [rustup](https://rustup.rs) | 1.94, minimum 1.85 for edition 2024 |
+| [Node.js](https://nodejs.org) | 24 LTS |
+| pnpm | pinned in `package.json`; `corepack enable` picks up the right one |
+
+### Then, per platform
+
+**Windows** — Microsoft C++ Build Tools with the *Desktop development with
+C++* workload, and LLVM for `libclang.dll`, which the FFmpeg bindings are
+generated with:
+
+```powershell
+winget install --id LLVM.LLVM --exact
+```
+
+Windows has no package manager carrying FFmpeg development files, so fetch a
+prebuilt one. It must carry `libmp3lame` and `libvorbis` and must not be
+`nonfree`; the GPL builds at
+[BtbN/FFmpeg-Builds](https://github.com/BtbN/FFmpeg-Builds/releases) qualify,
+and `ffmpeg-n8.1-latest-win64-gpl-shared-8.1` is what this was built against.
+Unpack it outside the checkout and write a `.cargo/config.toml` at the
+repository root so every shell finds it:
+
+```toml
+# Single quotes on purpose: a basic string reads every backslash as an escape.
+[env]
+FFMPEG_DIR = 'C:\path\to\ffmpeg-n8.1-latest-win64-gpl-shared-8.1'
+LIBCLANG_PATH = 'C:\Program Files\LLVM\bin'
+```
+
+**macOS**:
+
+```bash
+xcode-select --install && brew install ffmpeg llvm pkg-config
+```
+
+**Linux**, Debian or Ubuntu:
+
+```bash
+sudo apt install libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev libavcodec-dev libavformat-dev libavutil-dev libswresample-dev libclang-dev pkg-config
+```
+
+FFmpeg is found through `pkg-config` there, so nothing needs setting by hand —
+but a distribution shipping FFmpeg 6 or older will not do, since the bindings
+are built against the 7 and 8 series.
+
+### Build
 
 ```bash
 pnpm install && pnpm tauri build
@@ -61,11 +112,17 @@ FFmpeg libraries travel inside the installer, and the WebView2 runtime is
 fetched automatically if the machine does not already have it. No Visual C++
 redistributable, no separate FFmpeg, nothing to put on PATH.
 
-What you need on your own machine to *build* it, per platform, is in
-[docs/BUILD.md](docs/BUILD.md). To run it while developing:
+To run it while developing:
 
 ```bash
-pnpm install && pnpm tauri dev
+pnpm tauri dev
+```
+
+To include APE, which means you have read the Monkey's Audio SDK licence
+yourself and are satisfied that distributing the result is allowed:
+
+```bash
+cargo build --features toccata-core/ape
 ```
 
 ## Using it
