@@ -7,20 +7,24 @@ use std::path::{Path, PathBuf};
 const LIBRARIES: [&str; 4] = ["avcodec", "avformat", "avutil", "swresample"];
 
 fn main() {
-    tauri_build::build();
+    // Before Tauri, not after: the bundler checks that every declared resource
+    // exists, and on Windows the resources are the libraries collected here.
+    // Running it the other way round fails the build on a fresh checkout.
     carry_ffmpeg();
+    tauri_build::build();
 }
 
-/// Copies the FFmpeg libraries next to the executable being built.
+/// Puts the FFmpeg libraries where both the bundler and Windows will find them.
 ///
-/// Windows looks for a DLL beside the program that wants it, so without this a
-/// development build only runs from a shell that happens to have the FFmpeg
-/// package on its PATH — which is the kind of thing nobody remembers setting
-/// up until the day it is missing. The bundler does the same for a release
-/// through `tauri.conf.json`; this is the same idea for `cargo run`.
+/// Two copies, for two different readers. `src-tauri/ffmpeg` is what the
+/// Windows bundle declares as a resource, so a release carries them; beside the
+/// executable is where Windows looks when the program starts, so `cargo run`
+/// works from an ordinary shell rather than only from one that happens to have
+/// the FFmpeg package on its PATH.
 ///
 /// Does nothing where the libraries come from the system, which is everywhere
-/// except Windows.
+/// except Windows, and nothing at all without `FFMPEG_DIR` — where the build
+/// has already failed for want of the headers.
 fn carry_ffmpeg() {
     println!("cargo:rerun-if-env-changed=FFMPEG_DIR");
 
@@ -32,9 +36,8 @@ fn carry_ffmpeg() {
         return;
     };
 
-    let Some(target) = target_directory() else {
-        return;
-    };
+    let bundled = Path::new(env!("CARGO_MANIFEST_DIR")).join("ffmpeg");
+    let _ = std::fs::create_dir_all(&bundled);
 
     for library in LIBRARIES {
         let Some(found) = newest_matching(&Path::new(&source).join("bin"), library) else {
@@ -47,7 +50,11 @@ fn carry_ffmpeg() {
 
         // Copying over one that is already there is cheap, and keeps the copy
         // honest when the package underneath gets updated.
-        let _ = std::fs::copy(&found, target.join(name));
+        let _ = std::fs::copy(&found, bundled.join(name));
+
+        if let Some(target) = target_directory() {
+            let _ = std::fs::copy(&found, target.join(name));
+        }
     }
 }
 
