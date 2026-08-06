@@ -10,7 +10,7 @@ const ripping = useRip()
 const preview = usePreview()
 const verify = useVerify()
 const lyrics = useLyrics()
-const { settings, load: loadSettings } = useSettings()
+const { settings, load: loadSettings, save: saveSettings } = useSettings()
 
 const coreVersion = ref<string | null>(null)
 const folder = ref<string | null>(null)
@@ -58,6 +58,40 @@ watch(metadata.release, (candidate) => {
   }
 })
 
+const calibrating = ref(false)
+
+/**
+ * Measures the drive's read offset, once, the first time a disc it can be
+ * measured against turns up.
+ *
+ * A drive that has already been measured is left alone, and so is one whose
+ * offset somebody set by hand: a measurement of zero is indistinguishable from
+ * an untouched setting, which is a fair price for never overruling the user.
+ */
+async function calibrate() {
+  if (!isTauri() || !selectedId.value || settings.value?.driveOffsets?.[selectedId.value]) {
+    return
+  }
+
+  calibrating.value = true
+  try {
+    const offset = await invoke<number | null>('calibrate_offset', {
+      driveId: selectedId.value,
+    })
+
+    if (offset !== null && offset !== 0) {
+      await saveSettings({
+        driveOffsets: { ...settings.value?.driveOffsets, [selectedId.value]: offset },
+      })
+    }
+  } catch {
+    // A drive that cannot be measured still rips. It just will not verify
+    // against anybody until somebody sets the number by hand.
+  } finally {
+    calibrating.value = false
+  }
+}
+
 async function readDisc() {
   release.clear()
   ripping.reset()
@@ -71,6 +105,11 @@ async function readDisc() {
   if (!disc.value) {
     return
   }
+
+  // A drive nobody has measured yet is measured now, once, off the first disc
+  // that CTDB happens to know. Before the lookup, since it reads the disc and
+  // the lookup does not.
+  await calibrate()
 
   await metadata.lookup()
 
@@ -127,6 +166,10 @@ function toggleAll(include: boolean) {
     ? []
     : (toc.value?.tracks ?? []).filter((track) => track.audio).map((track) => track.number)
 }
+
+// Putting a disc in is all anybody has to do: the tray is watched, and a disc
+// that turns up is read the way the button reads it.
+useDiscWatch(selectedId, busy, readDisc)
 
 onMounted(async () => {
   if (!isTauri()) {
@@ -318,7 +361,8 @@ const loud = `${action} border-brass-500 bg-brass-500/10 text-brass-400 hover:bg
         {{ ripping.faultMessage.value }}
       </p>
 
-      <p v-if="verify.running.value" class="text-etch-600">{{ t('verify.running') }}</p>
+      <p v-if="calibrating" class="text-etch-600">{{ t('drive.calibrating') }}</p>
+      <p v-else-if="verify.running.value" class="text-etch-600">{{ t('verify.running') }}</p>
       <p v-else-if="verify.failed.value" class="text-etch-400">{{ t('verify.failed') }}</p>
       <p v-else-if="mismatched" class="text-etch-400">{{ t('verify.offsetHint') }}</p>
 

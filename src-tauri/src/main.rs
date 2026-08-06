@@ -118,6 +118,58 @@ fn read_disc(drive_id: String, state: State<'_, AppState>) -> Result<Disc, Drive
     })
 }
 
+/// Whether there is a disc in the tray.
+///
+/// Cheap enough to ask every couple of seconds, which is what the window does
+/// so that putting a disc in is all anybody has to do. A drive that is busy
+/// with a rip is not asked at all.
+#[tauri::command]
+fn disc_present(drive_id: String) -> bool {
+    drive::open(&drive_id)
+        .and_then(|mut handle| handle.media_present())
+        .unwrap_or(false)
+}
+
+/// Works out the drive's read offset by matching a track against CTDB.
+///
+/// One track is read once, with a little of its neighbours either side, and
+/// every candidate offset is then a different window over the same bytes.
+/// Trying offsets by re-reading would take an afternoon.
+///
+/// Only ever needs doing once per drive. Answers `None` when the disc is not
+/// one CTDB knows, which is not a failure: it means try another disc.
+#[tauri::command]
+async fn calibrate_offset(
+    drive_id: String,
+    state: State<'_, AppState>,
+) -> Result<Option<i32>, MetadataError> {
+    let toc = state
+        .disc
+        .lock()
+        .expect("state lock is never held across a panic")
+        .as_ref()
+        .map(|disc| disc.toc.clone());
+
+    let Some(toc) = toc else {
+        return Ok(None);
+    };
+
+    let entries = state.verification.lookup(&toc).await?;
+    if entries.is_empty() {
+        return Ok(None);
+    }
+
+    let found = tauri::async_runtime::spawn_blocking(move || {
+        toccata_core::verify::calibrate(&drive_id, &toc, &entries)
+    })
+    .await
+    .map_err(|_| MetadataError::Unreadable {
+        source_id: SourceId::Ctdb,
+    })?;
+
+    Ok(found)
+}
+
 #[tauri::command]
 async fn lookup_metadata(state: State<'_, AppState>) -> Result<LookupReport, DriveError> {
     let toc = state
@@ -1130,6 +1182,8 @@ fn main() {
             fetch_lyrics,
             set_lyrics,
             search_artwork,
+            disc_present,
+            calibrate_offset,
             verify_rip,
             rip_history,
             disc_history,

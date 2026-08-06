@@ -31,6 +31,12 @@ async fn main() {
             }
         };
 
+        match handle.media_present() {
+            Ok(true) => println!("  media    present"),
+            Ok(false) => println!("  media    tray is empty"),
+            Err(error) => println!("  media    {error}"),
+        }
+
         match handle.read_toc() {
             Ok(toc) => {
                 print_toc(&toc);

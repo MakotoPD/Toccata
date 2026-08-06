@@ -14,7 +14,7 @@ use windows::Win32::Storage::FileSystem::{
     GetDriveTypeW, GetLogicalDrives, OPEN_EXISTING,
 };
 use windows::Win32::System::IO::DeviceIoControl;
-use windows::Win32::System::Ioctl::IOCTL_STORAGE_EJECT_MEDIA;
+use windows::Win32::System::Ioctl::{IOCTL_STORAGE_CHECK_VERIFY, IOCTL_STORAGE_EJECT_MEDIA};
 use windows::Win32::System::WindowsProgramming::DRIVE_CDROM;
 use windows::core::PCWSTR;
 
@@ -165,6 +165,26 @@ impl Drive for WindowsDrive {
         }
 
         Ok(())
+    }
+
+    fn media_present(&mut self) -> Result<bool, DriveError> {
+        // A test unit ready underneath, which asks the drive whether it has
+        // something rather than asking it to read anything. A tray with no
+        // disc answers "not ready", which is the answer, not a failure.
+        let outcome = unsafe {
+            DeviceIoControl(
+                self.handle,
+                IOCTL_STORAGE_CHECK_VERIFY,
+                None,
+                0,
+                None,
+                0,
+                None,
+                None,
+            )
+        };
+
+        Ok(outcome.is_ok())
     }
 
     fn read_mcn(&mut self) -> Result<Option<String>, DriveError> {

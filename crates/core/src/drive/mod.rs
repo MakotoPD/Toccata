@@ -102,6 +102,16 @@ pub trait Drive {
     /// the same layout a WAV file wants: 16 bit little endian, left then right.
     fn read_audio(&mut self, start: u32, sectors: u32, into: &mut [u8]) -> Result<(), DriveError>;
 
+    /// Whether a disc is loaded, asked as cheaply as the system allows.
+    ///
+    /// Deliberately not a table of contents read: this is polled while the
+    /// application sits idle, and a drive asked to read its disc every couple
+    /// of seconds would spin up, stay awake and wear out. The question here is
+    /// only whether there is something in the tray.
+    fn media_present(&mut self) -> Result<bool, DriveError> {
+        Ok(true)
+    }
+
     /// Media Catalogue Number from the disc's subchannel, which on a
     /// commercial pressing is the barcode printed on the back of the case.
     ///

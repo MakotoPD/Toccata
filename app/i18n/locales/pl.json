@@ -18,7 +18,8 @@
     "reading": "Odczyt",
     "eject": "Wysuń",
     "offset": "Offset odczytu",
-    "samples": "sampli"
+    "samples": "sampli",
+    "calibrating": "Mierzenie tego napędu względem ripów innych osób"
   },
   "disc": {
     "waiting": "Włóż płytę CD Audio i odczytaj ją",

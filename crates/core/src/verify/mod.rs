@@ -207,6 +207,77 @@ impl<W: Write> Write for Verified<W> {
     }
 }
 
+/// How far either side of zero a drive's offset is looked for, in samples.
+/// Real drives sit well inside this; further out is not an offset but a fault.
+const OFFSET_RANGE: i32 = 1500;
+
+/// Works out a drive's read offset by matching one track against CTDB.
+///
+/// The track is read once, with a little of its neighbours either side, and
+/// every candidate offset is then a different window over the same bytes.
+/// Trying offsets by re-reading would take an afternoon.
+///
+/// A track from the middle of the disc, because the two ends are where CTDB's
+/// checksums stop being plain ones. Answers `None` when nothing matches, which
+/// usually means this particular disc is not one anybody has submitted.
+pub fn calibrate(drive_id: &str, toc: &crate::toc::Toc, entries: &[ctdb::Entry]) -> Option<i32> {
+    use crate::drive::{self, BYTES_PER_SECTOR};
+
+    let audio: Vec<_> = toc.tracks.iter().filter(|track| track.audio).collect();
+
+    // Neither the first nor the last, and never a track so short that the
+    // padding is most of it.
+    let index = audio.len() / 2;
+    let track = audio.get(index).filter(|track| track.length > 100)?;
+
+    let wanted: Vec<u32> = entries
+        .iter()
+        .filter(|entry| entry.track_crcs.len() > index)
+        .map(|entry| entry.track_crcs[index])
+        .collect();
+
+    if wanted.is_empty() {
+        return None;
+    }
+
+    let mut handle = drive::open(drive_id).ok()?;
+
+    let padding = OFFSET_RANGE.unsigned_abs().div_ceil(SAMPLES_PER_SECTOR) + 1;
+    let first = track.start.saturating_sub(padding);
+    let sectors = (track.length + padding * 2).min(toc.lead_out.saturating_sub(first));
+
+    let mut buffer = vec![0u8; sectors as usize * BYTES_PER_SECTOR];
+    for (batch, chunk) in buffer.chunks_mut(BYTES_PER_SECTOR * 25).enumerate() {
+        let start = first + (batch as u32 * 25);
+        let count = (chunk.len() / BYTES_PER_SECTOR) as u32;
+
+        handle.read_audio(start, count, chunk).ok()?;
+    }
+
+    let base = (track.start - first) as usize * SAMPLES_PER_SECTOR as usize;
+    let length = track.length as usize * SAMPLES_PER_SECTOR as usize;
+    let available = buffer.len() / BYTES_PER_SAMPLE;
+
+    (-OFFSET_RANGE..=OFFSET_RANGE).find(|offset| {
+        let Ok(start) = usize::try_from(base as i64 + i64::from(*offset)) else {
+            return false;
+        };
+
+        if start + length > available {
+            return false;
+        }
+
+        let mut verifier = Verifier::new(track.length * SAMPLES_PER_SECTOR, false, false);
+        let window = &buffer[start * BYTES_PER_SAMPLE..(start + length) * BYTES_PER_SAMPLE];
+
+        verifier
+            .write_all(window)
+            .expect("hashing into memory cannot fail");
+
+        wanted.contains(&verifier.finish().ctdb_crc32)
+    })
+}
+
 /// CRC-32 as everything else means it: the reflected polynomial, table driven.
 ///
 /// A disc is several hundred megabytes and the bit-at-a-time version spends

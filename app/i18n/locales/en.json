@@ -18,7 +18,8 @@
     "reading": "Reading",
     "eject": "Eject",
     "offset": "Read offset",
-    "samples": "samples"
+    "samples": "samples",
+    "calibrating": "Measuring this drive against a rip other people have made"
   },
   "disc": {
     "waiting": "Insert an audio CD and read the disc",
