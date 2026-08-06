@@ -13,7 +13,9 @@
 use std::collections::HashSet;
 use std::time::Duration;
 
-use super::{Lookup, MetadataError, MetadataSource, ReleaseCandidate, SourceId, TrackMetadata};
+use super::{
+    Disc, Lookup, MetadataError, MetadataSource, ReleaseCandidate, SourceId, TrackMetadata,
+};
 use crate::toc::Toc;
 
 // Plain HTTP on purpose: the service does not answer on 443. Nothing
@@ -49,7 +51,8 @@ impl MetadataSource for Ctdb {
         SourceId::Ctdb
     }
 
-    fn lookup<'a>(&'a self, toc: &'a Toc) -> Lookup<'a> {
+    fn lookup<'a>(&'a self, disc: &'a Disc) -> Lookup<'a> {
+        let toc = &disc.toc;
         Box::pin(async move {
             let response = self
                 .client

@@ -12,10 +12,9 @@ use std::time::Duration;
 use serde::Deserialize;
 
 use super::{
-    Lookup, Medium as ReleaseMedium, MetadataError, MetadataSource, ReleaseCandidate, SourceId,
-    TrackMetadata, cover,
+    Disc, Lookup, Medium as ReleaseMedium, MetadataError, MetadataSource, ReleaseCandidate,
+    SourceId, TrackMetadata, cover,
 };
-use crate::toc::Toc;
 
 const BASE_URL: &str = "https://musicbrainz.org/ws/2";
 const USER_AGENT: &str = concat!(
@@ -204,7 +203,8 @@ impl MetadataSource for MusicBrainz {
         SourceId::MusicBrainz
     }
 
-    fn lookup<'a>(&'a self, toc: &'a Toc) -> Lookup<'a> {
+    fn lookup<'a>(&'a self, disc: &'a Disc) -> Lookup<'a> {
+        let toc = &disc.toc;
         Box::pin(async move {
             let disc_id = toc.musicbrainz_disc_id();
             let url = format!("{BASE_URL}/discid/{disc_id}");

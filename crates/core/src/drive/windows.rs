@@ -4,8 +4,9 @@ use std::ffi::c_void;
 use std::mem::size_of;
 
 use windows::Win32::Devices::Cdrom::{
-    CDDA, CDROM_READ_TOC_EX, CDROM_TOC, IOCTL_CDROM_RAW_READ, IOCTL_CDROM_READ_TOC_EX,
-    RAW_READ_INFO, TRACK_DATA,
+    CDDA, CDROM_READ_TOC_EX, CDROM_SUB_Q_DATA_FORMAT, CDROM_TOC, IOCTL_CDROM_MEDIA_CATALOG,
+    IOCTL_CDROM_RAW_READ, IOCTL_CDROM_READ_Q_CHANNEL, IOCTL_CDROM_READ_TOC_EX,
+    IOCTL_CDROM_TRACK_ISRC, RAW_READ_INFO, SUB_Q_CHANNEL_DATA, TRACK_DATA,
 };
 use windows::Win32::Foundation::{CloseHandle, ERROR_ACCESS_DENIED, ERROR_NOT_READY, HANDLE};
 use windows::Win32::Storage::FileSystem::{
@@ -166,6 +167,31 @@ impl Drive for WindowsDrive {
         Ok(())
     }
 
+    fn read_mcn(&mut self) -> Result<Option<String>, DriveError> {
+        let answer = self.subchannel(IOCTL_CDROM_MEDIA_CATALOG, 0)?;
+
+        // Safety: the format asked for is the one being read back, and the
+        // union is only ever read through the arm that was requested.
+        let catalog = unsafe { answer.MediaCatalog };
+
+        // The low bit of the bitfield is the validity flag. A disc without a
+        // catalogue number answers happily with an empty one.
+        Ok((catalog._bitfield & 1 != 0)
+            .then(|| digits(&catalog.MediaCatalog))
+            .flatten())
+    }
+
+    fn read_isrc(&mut self, track: u8) -> Result<Option<String>, DriveError> {
+        let answer = self.subchannel(IOCTL_CDROM_TRACK_ISRC, track)?;
+
+        // Safety: as above, the arm matches the format that was asked for.
+        let isrc = unsafe { answer.TrackIsrc };
+
+        Ok((isrc._bitfield & 1 != 0)
+            .then(|| text(&isrc.TrackIsrc))
+            .flatten())
+    }
+
     fn eject(&mut self) -> Result<(), DriveError> {
         unsafe {
             DeviceIoControl(
@@ -181,6 +207,62 @@ impl Drive for WindowsDrive {
         }
         .map_err(|error| map_error(&self.info.id, "IOCTL_STORAGE_EJECT_MEDIA", &error))
     }
+}
+
+impl WindowsDrive {
+    /// Asks the drive for one subchannel field.
+    ///
+    /// A drive that refuses is reported as refusing rather than as a disc with
+    /// nothing on it. The two look the same to the cascade, which ignores both,
+    /// but they are not the same thing to somebody working out why a disc will
+    /// not identify.
+    fn subchannel(&mut self, format: u32, track: u8) -> Result<SUB_Q_CHANNEL_DATA, DriveError> {
+        let request = CDROM_SUB_Q_DATA_FORMAT {
+            Format: format as u8,
+            Track: track,
+        };
+
+        let mut answer = SUB_Q_CHANNEL_DATA::default();
+        let mut returned = 0u32;
+
+        let outcome = unsafe {
+            DeviceIoControl(
+                self.handle,
+                IOCTL_CDROM_READ_Q_CHANNEL,
+                Some(&request as *const _ as *const c_void),
+                size_of::<CDROM_SUB_Q_DATA_FORMAT>() as u32,
+                Some(&mut answer as *mut _ as *mut c_void),
+                size_of::<SUB_Q_CHANNEL_DATA>() as u32,
+                Some(&mut returned),
+                None,
+            )
+        };
+
+        outcome
+            .map(|()| answer)
+            .map_err(|error| map_error(&self.info.id, "IOCTL_CDROM_READ_Q_CHANNEL", &error))
+    }
+}
+
+/// The printable part of a subchannel field, which the drive pads with nulls
+/// or spaces. Empty once trimmed means the disc has nothing to say.
+fn text(raw: &[u8]) -> Option<String> {
+    let trimmed: String = raw
+        .iter()
+        .copied()
+        .take_while(|byte| *byte != 0)
+        .map(char::from)
+        .filter(|character| character.is_ascii_graphic())
+        .collect();
+
+    (!trimmed.is_empty()).then_some(trimmed)
+}
+
+/// A catalogue number is thirteen digits and nothing else. Drives have been
+/// known to return spaces or rubbish with the validity bit set, and a barcode
+/// that is not a barcode would send the search after the wrong disc entirely.
+fn digits(raw: &[u8]) -> Option<String> {
+    text(raw).filter(|value| value.len() == 13 && value.chars().all(|c| c.is_ascii_digit()))
 }
 
 impl Drop for WindowsDrive {

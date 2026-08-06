@@ -23,7 +23,9 @@ use toccata_core::metadata::cover::{self, Covers};
 use toccata_core::metadata::discogs::Discogs;
 use toccata_core::metadata::manual::Manual;
 use toccata_core::metadata::musicbrainz::MusicBrainz;
-use toccata_core::metadata::{Cascade, LookupReport, MetadataError, ReleaseCandidate, SourceId};
+use toccata_core::metadata::{
+    self, Cascade, LookupReport, MetadataError, ReleaseCandidate, SourceId,
+};
 use toccata_core::naming::{self, template};
 use toccata_core::rip::{self, Options, RipError};
 use toccata_core::settings::Settings;
@@ -35,7 +37,7 @@ use toccata_core::verify::{self, Checksums};
 /// here rather than passing it back from the frontend means a lookup can never
 /// be run against a table of contents the drive did not actually report.
 struct AppState {
-    disc: Mutex<Option<Toc>>,
+    disc: Mutex<Option<metadata::Disc>>,
     metadata: Cascade,
     covers: Covers,
     /// Manual search talks to MusicBrainz directly rather than through the
@@ -91,10 +93,22 @@ fn read_disc(drive_id: String, state: State<'_, AppState>) -> Result<Disc, Drive
     let mut handle = drive::open(&drive_id)?;
     let toc = handle.read_toc()?;
 
+    // Asked for once, here, because the disc carries them and no database can
+    // be asked instead. A drive that refuses is not a reason to stop: most
+    // discs have neither, and the lookup works without both.
+    let mut described = metadata::Disc::new(toc.clone());
+    described.mcn = handle.read_mcn().ok().flatten();
+
+    for track in toc.tracks.iter().filter(|track| track.audio) {
+        if let Ok(Some(isrc)) = handle.read_isrc(track.number) {
+            described.isrcs.insert(track.number, isrc);
+        }
+    }
+
     *state
         .disc
         .lock()
-        .expect("state lock is never held across a panic") = Some(toc.clone());
+        .expect("state lock is never held across a panic") = Some(described);
 
     Ok(Disc {
         drive: handle.info().clone(),
@@ -112,14 +126,14 @@ async fn lookup_metadata(state: State<'_, AppState>) -> Result<LookupReport, Dri
         .expect("state lock is never held across a panic")
         .clone();
 
-    let Some(toc) = toc else {
+    let Some(disc) = toc else {
         return Ok(LookupReport {
             candidates: Vec::new(),
             failures: Vec::new(),
         });
     };
 
-    Ok(state.metadata.lookup(&toc).await)
+    Ok(state.metadata.lookup(&disc).await)
 }
 
 /// Free text search, always available rather than only after the cascade has
@@ -195,7 +209,7 @@ fn current_disc_id(state: &State<'_, AppState>) -> Option<String> {
         .lock()
         .expect("state lock is never held across a panic")
         .as_ref()
-        .map(|toc| toc.musicbrainz_disc_id())
+        .map(|disc| disc.toc.musicbrainz_disc_id())
 }
 
 /// An image the user picked themselves, which is the last resort when no
@@ -377,7 +391,8 @@ fn rip_folder(
         .disc
         .lock()
         .expect("state lock is never held across a panic")
-        .clone()?;
+        .as_ref()
+        .map(|disc| disc.toc.clone())?;
 
     Some(
         output_folder(&app, &state, &toc, release.as_ref())
@@ -439,7 +454,8 @@ async fn rip_disc(
         .disc
         .lock()
         .expect("state lock is never held across a panic")
-        .clone()
+        .as_ref()
+        .map(|disc| disc.toc.clone())
         .ok_or(RipError::NoSuchTrack { number: 0 })?;
 
     let cancelled = state.cancelled.clone();
@@ -836,7 +852,8 @@ async fn preview_track(
         .disc
         .lock()
         .expect("state lock is never held across a panic")
-        .clone()
+        .as_ref()
+        .map(|disc| disc.toc.clone())
         .ok_or(RipError::NoSuchTrack { number })?;
 
     let audio = tauri::async_runtime::spawn_blocking(move || {
@@ -874,7 +891,8 @@ async fn fetch_lyrics(
         .disc
         .lock()
         .expect("state lock is never held across a panic")
-        .clone();
+        .as_ref()
+        .map(|disc| disc.toc.clone());
 
     let Some(toc) = toc else {
         return Ok(Vec::new());
@@ -1015,7 +1033,8 @@ async fn verify_rip(state: State<'_, AppState>) -> Result<Vec<TrackVerification>
         .disc
         .lock()
         .expect("state lock is never held across a panic")
-        .clone();
+        .as_ref()
+        .map(|disc| disc.toc.clone());
 
     let (Some(toc), false) = (toc, ripped.is_empty()) else {
         return Ok(Vec::new());

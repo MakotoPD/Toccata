@@ -102,6 +102,23 @@ pub trait Drive {
     /// the same layout a WAV file wants: 16 bit little endian, left then right.
     fn read_audio(&mut self, start: u32, sectors: u32, into: &mut [u8]) -> Result<(), DriveError>;
 
+    /// Media Catalogue Number from the disc's subchannel, which on a
+    /// commercial pressing is the barcode printed on the back of the case.
+    ///
+    /// The disc itself is carrying it, so this reaches pressings no online
+    /// database has ever heard of. Most discs do not have one, and a drive
+    /// that cannot be asked is not an error either: both come back as `None`.
+    fn read_mcn(&mut self) -> Result<Option<String>, DriveError> {
+        Ok(None)
+    }
+
+    /// ISRC of one track, again from the subchannel. Identifies the recording
+    /// rather than the pressing, which rescues a disc nobody has catalogued
+    /// but whose songs are known.
+    fn read_isrc(&mut self, _track: u8) -> Result<Option<String>, DriveError> {
+        Ok(None)
+    }
+
     fn eject(&mut self) -> Result<(), DriveError>;
 }
 

@@ -16,6 +16,7 @@ use serde::{Deserialize, Serialize};
 use crate::toc::Toc;
 
 pub mod artwork;
+pub mod barcode;
 pub mod cover;
 pub mod ctdb;
 pub mod discogs;
@@ -163,7 +164,35 @@ type Lookup<'a> =
 pub trait MetadataSource: Send + Sync {
     fn id(&self) -> SourceId;
 
-    fn lookup<'a>(&'a self, toc: &'a Toc) -> Lookup<'a>;
+    fn lookup<'a>(&'a self, disc: &'a Disc) -> Lookup<'a>;
+}
+
+/// Everything known about the disc in the drive before anybody is asked.
+///
+/// More than the table of contents, because the disc itself carries two things
+/// no database can be asked for: a catalogue number and one identifier per
+/// recording. Both are frequently absent, which is why they are optional
+/// rather than a separate kind of lookup.
+#[derive(Debug, Clone)]
+pub struct Disc {
+    pub toc: Toc,
+    /// Media catalogue number from the subchannel, which on a commercial
+    /// pressing is the barcode on the back of the case.
+    pub mcn: Option<String>,
+    /// ISRC per track number, for the tracks that carry one.
+    pub isrcs: std::collections::HashMap<u8, String>,
+}
+
+impl Disc {
+    /// A disc described by its table of contents alone, which is all that is
+    /// known until the subchannel has been asked.
+    pub fn new(toc: Toc) -> Self {
+        Self {
+            toc,
+            mcn: None,
+            isrcs: std::collections::HashMap::new(),
+        }
+    }
 }
 
 #[derive(Debug, Serialize)]
@@ -187,14 +216,14 @@ impl Cascade {
 
     /// Walks the cascade until something answers. Later sources are only asked
     /// when the earlier ones found nothing, but a failure never stops the walk.
-    pub async fn lookup(&self, toc: &Toc) -> LookupReport {
+    pub async fn lookup(&self, disc: &Disc) -> LookupReport {
         let mut report = LookupReport {
             candidates: Vec::new(),
             failures: Vec::new(),
         };
 
         for source in &self.sources {
-            match source.lookup(toc).await {
+            match source.lookup(disc).await {
                 Ok(found) if !found.is_empty() => {
                     report.candidates = found;
                     break;
@@ -225,6 +254,10 @@ impl Cascade {
             // CTDB replicates MusicBrainz, Discogs and freedb and matches on a
             // fuzzy TOC, so it reaches discs an exact Disc ID misses.
             Box::new(ctdb::Ctdb::default()),
+            // Last, because most discs carry no catalogue number, but first
+            // among the sources that can reach a pressing nobody submitted a
+            // Disc ID for: the barcode comes off the disc itself.
+            Box::new(barcode::Barcode::default()),
         ])
     }
 }

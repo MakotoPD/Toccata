@@ -34,6 +34,22 @@ async fn main() {
         match handle.read_toc() {
             Ok(toc) => {
                 print_toc(&toc);
+
+                // Straight off the disc, so it answers where no database can.
+                match handle.read_mcn() {
+                    Ok(Some(mcn)) => println!("  mcn      {mcn}"),
+                    Ok(None) => println!("  mcn      none on this disc"),
+                    Err(error) => println!("  mcn      {error}"),
+                }
+
+                for track in toc.tracks.iter().filter(|track| track.audio) {
+                    match handle.read_isrc(track.number) {
+                        Ok(Some(isrc)) => println!("  isrc {:>2}  {isrc}", track.number),
+                        Ok(None) => {}
+                        Err(error) => println!("  isrc {:>2}  {error}", track.number),
+                    }
+                }
+
                 identify(&toc).await;
             }
             Err(error) => println!("  cannot read toc: {error}"),
@@ -66,7 +82,9 @@ async fn identify(toc: &Toc) {
     // Corrections made in the application live under its own data directory;
     // this scratch path keeps the example from reading them.
     let store = std::env::temp_dir().join("toccata-example-discs");
-    let report = Cascade::standard(store).lookup(toc).await;
+    let report = Cascade::standard(store)
+        .lookup(&toccata_core::metadata::Disc::new(toc.clone()))
+        .await;
 
     for failure in &report.failures {
         println!("  source failed: {failure}");

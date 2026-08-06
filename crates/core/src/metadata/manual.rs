@@ -9,8 +9,7 @@
 use std::fs;
 use std::path::PathBuf;
 
-use super::{Lookup, MetadataError, MetadataSource, ReleaseCandidate, SourceId};
-use crate::toc::Toc;
+use super::{Disc, Lookup, MetadataError, MetadataSource, ReleaseCandidate, SourceId};
 
 pub struct Manual {
     root: PathBuf,
@@ -93,7 +92,8 @@ impl MetadataSource for Manual {
         SourceId::Manual
     }
 
-    fn lookup<'a>(&'a self, toc: &'a Toc) -> Lookup<'a> {
+    fn lookup<'a>(&'a self, disc: &'a Disc) -> Lookup<'a> {
+        let toc = &disc.toc;
         Box::pin(async move {
             Ok(self
                 .load(&toc.musicbrainz_disc_id())
