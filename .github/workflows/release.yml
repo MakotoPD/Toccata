@@ -1,0 +1,92 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+# Only the platforms whose bundle carries everything it needs. A Windows
+# installer brings the FFmpeg libraries with it and fetches WebView2 by
+# itself, and linuxdeploy copies the linked libraries into an AppImage.
+#
+# macOS is absent on purpose: a .app built here links Homebrew's FFmpeg by
+# absolute path, so it would run only on machines that already had FFmpeg
+# installed. Adding it means the @rpath and install_name_tool work first,
+# otherwise the download is broken for exactly the people it is aimed at.
+jobs:
+  release:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            args: --bundles nsis
+          - os: ubuntu-latest
+            args: --bundles appimage
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Linux system dependencies
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libxdo-dev \
+            libssl-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libavcodec-dev \
+            libavformat-dev \
+            libavutil-dev \
+            libswresample-dev \
+            libclang-dev
+
+      - name: Install Windows system dependencies
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          choco install llvm -y --no-progress
+          "LIBCLANG_PATH=C:\Program Files\LLVM\bin" >> $env:GITHUB_ENV
+
+          $url = 'https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-n8.1-latest-win64-gpl-shared-8.1.zip'
+          Invoke-WebRequest -Uri $url -OutFile ffmpeg.zip
+          Expand-Archive -Path ffmpeg.zip -DestinationPath $env:RUNNER_TEMP
+          $dir = "$env:RUNNER_TEMP\ffmpeg-n8.1-latest-win64-gpl-shared-8.1"
+          "FFMPEG_DIR=$dir" >> $env:GITHUB_ENV
+          "$dir\bin" >> $env:GITHUB_PATH
+
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - uses: tauri-apps/tauri-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: Toccata ${{ github.ref_name }}
+          releaseBody: |
+            Put an audio CD in the drive and Toccata does the rest.
+
+            **Windows** — download the `-setup.exe` and run it. Nothing else
+            to install.
+
+            **Linux** — download the `.AppImage`, make it executable and run
+            it. Reading a drive needs membership of the `cdrom` or `optical`
+            group.
+          releaseDraft: true
+          args: ${{ matrix.args }}
