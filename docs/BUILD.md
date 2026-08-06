@@ -118,6 +118,28 @@ Bundle targets come from `bundle.targets: "all"` in
 `src-tauri/tauri.conf.json`, so each platform produces what it can: NSIS and
 MSI on Windows, AppImage, deb and rpm on Linux, `.app` and `.dmg` on macOS.
 
+### Windows: the libraries the bundle carries
+
+Windows has no system FFmpeg, so a release has to bring its own. Copy the four
+libraries the application imports into `src-tauri/ffmpeg` before bundling, and
+the bundler puts them next to the executable:
+
+```powershell
+$src = "$env:FFMPEG_DIR\bin"
+"avcodec-62.dll", "avformat-62.dll", "avutil-60.dll", "swresample-6.dll" |
+  ForEach-Object { Copy-Item "$src\$_" src-tauri\ffmpeg\ }
+```
+
+Four rather than the seven in the package: `avfilter`, `avdevice` and
+`swscale` are for video and filtering, neither of which this touches. They are
+about 119 MB together, most of it `avcodec`, which carries every decoder
+FFmpeg was built with. A build configured for audio alone would be a fraction
+of that, and is worth doing before a release anyone downloads.
+
+The libraries are not in the repository. They are somebody else's build, and
+which one you ship is a licensing decision you make rather than one made for
+you — see the note in the README about `nonfree`.
+
 ## Optional: APE
 
 Monkey's Audio is off by default. FFmpeg decodes APE but does not encode it,
@@ -149,11 +171,10 @@ pnpm lint && pnpm typecheck && cargo fmt --all --check && cargo clippy --workspa
 each system's own interface in the meantime. FFmpeg *is* linked, which is why
 it appears under the prerequisites above.
 
-**Shipping FFmpeg with the bundle.** The prerequisites cover building. A
-release still has to carry the libraries it links against: the Windows DLLs
-next to the executable, and the macOS `@rpath` / `install_name_tool` fixups
-for the dylibs. Neither is wired into `tauri.conf.json` yet, so a bundle built
-today runs only where FFmpeg is already installed.
+**Shipping FFmpeg on macOS.** Windows is covered — see below — and Linux takes
+its FFmpeg from the distribution. macOS still needs the `@rpath` and
+`install_name_tool` fixups that would let a `.app` carry its own dylibs, so a
+bundle built there runs only where Homebrew's FFmpeg is already installed.
 
 **Code signing.** Both are deferred, and both need credentials that cannot
 live in this repository:

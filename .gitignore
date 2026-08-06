@@ -22,3 +22,5 @@ Thumbs.db
 
 docs/*
 CLAUDE.MD
+# Somebody else's FFmpeg build, fetched per machine rather than committed.
+src-tauri/ffmpeg/*.dll
