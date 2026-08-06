@@ -50,6 +50,18 @@ const statusTone: Record<string, string> = {
   done: 'text-etch-400',
   failed: 'text-brass-400',
 }
+
+const verdictTone: Record<string, string> = {
+  accurate: 'text-emerald-400',
+  different: 'text-brass-400',
+  unknown: 'text-etch-600',
+}
+
+const verify = useVerify()
+
+function verdict(number: number) {
+  return verify.of(number)?.verdict ?? null
+}
 </script>
 
 <template>
@@ -140,7 +152,18 @@ const statusTone: Record<string, string> = {
         </td>
 
         <td class="py-1.5 pl-4 text-[0.6875rem] uppercase tracking-[0.12em]">
-          <span v-if="status(track.number)" :class="statusTone[status(track.number)!]">
+          <!-- Once a rip is checked, what the world thinks matters more than
+               that it finished, so the verdict takes the column over. -->
+          <span v-if="verdict(track.number)" :class="verdictTone[verdict(track.number)!.state]">
+            {{
+              verdict(track.number)!.state === 'accurate'
+                ? t('verify.accurate', {
+                    count: (verdict(track.number) as { confidence: number }).confidence,
+                  })
+                : t(`verify.${verdict(track.number)!.state}`)
+            }}
+          </span>
+          <span v-else-if="status(track.number)" :class="statusTone[status(track.number)!]">
             {{ t(`rip.status.${status(track.number)}`) }}
           </span>
           <span v-else-if="track.preEmphasis" class="text-etch-600">

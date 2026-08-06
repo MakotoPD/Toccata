@@ -16,7 +16,9 @@
     "rescan": "Szukaj ponownie",
     "read": "Odczytaj płytę",
     "reading": "Odczyt",
-    "eject": "Wysuń"
+    "eject": "Wysuń",
+    "offset": "Offset odczytu",
+    "samples": "sampli"
   },
   "disc": {
     "waiting": "Włóż płytę CD Audio i odczytaj ją",
@@ -209,5 +211,13 @@
       "write": "Nie udało się zapisać zgranego audio na dysk.",
       "cancelled": "Zgrywanie zostało zatrzymane."
     }
+  },
+  "verify": {
+    "accurate": "Zgodne ({count})",
+    "different": "Brak zgodności",
+    "unknown": "Nie ma jej w bazie",
+    "running": "Porównywanie z innymi ripami",
+    "failed": "Nie udało się porównać ripu: serwis nie odpowiedział.",
+    "offsetHint": "Ścieżka, która z niczym się nie zgadza, to zwykle nieustawiony offset odczytu, a nie uszkodzona płyta."
   }
 }

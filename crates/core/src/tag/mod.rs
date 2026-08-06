@@ -24,6 +24,10 @@ pub struct RippedTrack {
     /// Sectors the drive refused and that came out as silence. Anything above
     /// zero means the rip is not bit-perfect.
     pub unreadable_sectors: u32,
+
+    /// What the audio hashed to, which is what the log reports and what any
+    /// comparison against other people's rips is made on.
+    pub checksums: crate::verify::Checksums,
 }
 
 /// The album those tracks belong to.

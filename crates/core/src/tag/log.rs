@@ -51,12 +51,22 @@ pub fn write(conditions: &Conditions, album: &Album) -> String {
     let _ = writeln!(out, "Album               : {}", album.title);
     let _ = writeln!(out);
 
+    // Wide enough to read across, because the point of the checksums is that
+    // somebody can compare them with somebody else's by eye.
+    let _ = writeln!(
+        out,
+        "  #  length      CRC32  AccurateRip v1  AccurateRip v2  state       file"
+    );
+
     for track in &album.tracks {
         let _ = writeln!(
             out,
-            "{:>3}  {}  {}  {}",
+            "{:>3}  {}  {:08X}  {:>14X}  {:>14X}  {}  {}",
             track.number,
             length(track.length),
+            track.checksums.crc32,
+            track.checksums.accuraterip_v1,
+            track.checksums.accuraterip_v2,
             outcome(track.unreadable_sectors),
             track.file
         );
@@ -178,6 +188,11 @@ mod tests {
                     length: 176 * FRAMES_PER_SECOND,
                     pre_emphasis: false,
                     unreadable_sectors: 0,
+                    checksums: crate::verify::Checksums {
+                        crc32: 0,
+                        accuraterip_v1: 0,
+                        accuraterip_v2: 0,
+                    },
                 },
                 RippedTrack {
                     number: 2,
@@ -187,6 +202,11 @@ mod tests {
                     length: 151 * FRAMES_PER_SECOND,
                     pre_emphasis: false,
                     unreadable_sectors: unreadable,
+                    checksums: crate::verify::Checksums {
+                        crc32: 0,
+                        accuraterip_v1: 0,
+                        accuraterip_v2: 0,
+                    },
                 },
             ],
             ..Album::default()

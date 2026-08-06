@@ -16,7 +16,9 @@
     "rescan": "Rescan",
     "read": "Read disc",
     "reading": "Reading",
-    "eject": "Eject"
+    "eject": "Eject",
+    "offset": "Read offset",
+    "samples": "samples"
   },
   "disc": {
     "waiting": "Insert an audio CD and read the disc",
@@ -209,5 +211,13 @@
       "write": "The extracted audio could not be written to disk.",
       "cancelled": "The rip was stopped."
     }
+  },
+  "verify": {
+    "accurate": "Accurate ({count})",
+    "different": "No match",
+    "unknown": "Not in the database",
+    "running": "Comparing against other rips",
+    "failed": "The rip could not be compared: the service did not answer.",
+    "offsetHint": "A track that matches nothing is usually a read offset that has not been set, rather than a damaged disc."
   }
 }

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { DriveInfo, Format } from '~/types/disc'
 
-defineProps<{
+const props = defineProps<{
   drives: DriveInfo[]
   driveId: string | null
   /** Where the rip will land, resolved by the backend from the pattern. */
@@ -19,6 +19,17 @@ const MULTI = '[multi]'
 
 const chosen = computed(() => settings.value?.formats ?? [])
 const multiple = computed(() => chosen.value.length > 1)
+
+const offset = computed({
+  get: () => (props.driveId ? (settings.value?.driveOffsets?.[props.driveId] ?? 0) : 0),
+  set: (value: number) => {
+    if (props.driveId) {
+      void save({
+        driveOffsets: { ...settings.value?.driveOffsets, [props.driveId]: value || 0 },
+      })
+    }
+  },
+})
 
 /**
  * Picking the multi entry keeps whatever was already selected and adds a
@@ -127,6 +138,22 @@ const small =
       <button type="button" :class="small" :disabled="!folder" @click="emit('reveal')">
         {{ t('output.reveal') }}
       </button>
+    </div>
+
+    <!-- A property of the drive model, not of the disc. Wrong here, and every
+         rip looks perfect and matches nobody. -->
+    <div :class="row">
+      <span :class="label">{{ t('drive.offset') }}</span>
+      <input
+        v-model.number="offset"
+        type="number"
+        step="1"
+        :disabled="busy || !driveId"
+        :class="[control, 'font-mono']"
+      />
+      <span class="shrink-0 text-[0.625rem] uppercase tracking-[0.14em] text-etch-600">
+        {{ t('drive.samples') }}
+      </span>
     </div>
 
     <div :class="row">

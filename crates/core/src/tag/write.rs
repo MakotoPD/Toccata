@@ -146,6 +146,11 @@ mod tests {
             length: 7500,
             pre_emphasis: false,
             unreadable_sectors: 0,
+            checksums: crate::verify::Checksums {
+                crc32: 0,
+                accuraterip_v1: 0,
+                accuraterip_v2: 0,
+            },
         }
     }
 

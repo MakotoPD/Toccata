@@ -13,7 +13,7 @@ use std::time::SystemTime;
 use serde::Serialize;
 use tauri::ipc::Channel;
 use tauri::{AppHandle, Manager, State};
-use toccata_core::drive::{self, DriveError, DriveInfo};
+use toccata_core::drive::{self, DriveError, DriveInfo, SAMPLES_PER_SECTOR};
 use toccata_core::encode::{self, Format};
 use toccata_core::metadata::artwork::{Artwork, Artworks, Query as ArtworkQuery};
 use toccata_core::metadata::cover::{self, Covers};
@@ -26,6 +26,7 @@ use toccata_core::rip::{self, Options, RipError};
 use toccata_core::settings::Settings;
 use toccata_core::tag;
 use toccata_core::toc::Toc;
+use toccata_core::verify::{self, Checksums};
 
 /// The disc currently on screen, plus the metadata sources. Keeping the TOC
 /// here rather than passing it back from the frontend means a lookup can never
@@ -45,6 +46,10 @@ struct AppState {
     /// Raised to ask a rip in progress to stop at the next chunk.
     cancelled: Arc<AtomicBool>,
     artwork: Artworks,
+    /// What the last rip hashed to, per track, kept so the window can ask for
+    /// an online check whenever it likes rather than only as the rip ends.
+    ripped: Arc<Mutex<Vec<(u8, Checksums)>>>,
+    verification: verify::ctdb::Verification,
     settings: Mutex<Settings>,
     /// Where the settings live, so saving does not have to ask again.
     settings_path: PathBuf,
@@ -412,7 +417,6 @@ async fn rip_disc(
     // Track numbers to extract; empty means every audio track on the disc.
     tracks: Vec<u8>,
     cover: Option<String>,
-    options: Options,
     channel: Channel<RipEvent>,
     app: AppHandle,
     state: State<'_, AppState>,
@@ -434,6 +438,11 @@ async fn rip_disc(
         .expect("state lock is never held across a panic")
         .clone();
 
+    // Read before the settings are taken apart below.
+    let options = Options {
+        drive_offset: settings.drive_offset(&drive_id),
+    };
+
     let pattern = settings.pattern;
     let formats: Vec<(Format, Option<encode::Quality>)> = settings
         .formats
@@ -441,13 +450,19 @@ async fn rip_disc(
         .map(|format| (*format, settings.qualities.get(format).copied()))
         .collect();
 
+    // The offset belongs to the drive, which is why it is read from the
+    // settings rather than accepted from the window. A rip with the wrong one
+    // looks perfect and matches nobody, which is the hardest kind of mistake
+    // to notice.
+    let hashed = state.ripped.clone();
+
     // The cover arrives as the data URI the window is showing, so what gets
     // embedded is what the user is looking at rather than a second download.
     let cover = cover.as_deref().and_then(cover::bytes_from_data_uri);
 
     tauri::async_runtime::spawn_blocking(move || {
         rip_all(
-            &drive_id, &toc, release, &tracks, &options, &root, &pattern, &formats, cover,
+            &drive_id, &toc, release, &tracks, &options, &root, &pattern, &formats, cover, &hashed,
             &channel, &cancelled,
         )
     })
@@ -466,6 +481,8 @@ fn rip_all(
     pattern: &str,
     formats: &[(Format, Option<encode::Quality>)],
     cover: Option<Vec<u8>>,
+    // Where the checksums are left for the online check to pick up.
+    hashed: &Mutex<Vec<(u8, Checksums)>>,
     channel: &Channel<RipEvent>,
     cancelled: &AtomicBool,
 ) -> Result<(), RipError> {
@@ -528,12 +545,28 @@ fn rip_all(
 
         // One read of the disc feeds every format at once. Reading it again
         // per format would cost minutes and wear the drive for nothing.
-        let mut output = encode::Fanout::new(
+        let fanout = encode::Fanout::new(
             formats
                 .iter()
                 .zip(&files)
                 .map(|((format, quality), file)| format.create_with(file, *quality))
                 .collect::<Result<Vec<_>, _>>()?,
+        );
+
+        // The checksums are taken from the same bytes the encoders are given,
+        // which is what makes them describe the files that were written rather
+        // than something the drive said on the way past.
+        let length = toc
+            .tracks
+            .iter()
+            .find(|track| track.number == number)
+            .map_or(0, |track| track.length);
+
+        let mut output = verify::Verified::new(
+            fanout,
+            length * SAMPLES_PER_SECTOR,
+            Some(&number) == audio.first(),
+            Some(&number) == audio.last(),
         );
         let outcome = rip::track(
             handle.as_mut(),
@@ -555,7 +588,8 @@ fn rip_all(
             Ok(extracted) => {
                 // The codec still holds frames and the container still owes a
                 // trailer, so the file is only real once this returns.
-                output.finish()?;
+                let (fanout, checksums) = output.finish();
+                fanout.finish()?;
                 unreadable += extracted.unreadable_sectors;
 
                 ripped.push(tag::RippedTrack {
@@ -568,16 +602,13 @@ fn rip_all(
                         .map(|entry| entry.artist.clone())
                         .or_else(|| release.as_ref().map(|release| release.artist.clone()))
                         .unwrap_or_default(),
-                    length: toc
-                        .tracks
-                        .iter()
-                        .find(|track| track.number == number)
-                        .map_or(0, |track| track.length),
+                    length,
                     pre_emphasis: toc
                         .tracks
                         .iter()
                         .any(|track| track.number == number && track.pre_emphasis),
                     unreadable_sectors: extracted.unreadable_sectors,
+                    checksums,
                 });
                 written.push(files);
 
@@ -601,6 +632,13 @@ fn rip_all(
             }
         }
     }
+
+    *hashed
+        .lock()
+        .expect("state lock is never held across a panic") = ripped
+        .iter()
+        .map(|track| (track.number, track.checksums))
+        .collect();
 
     let album = describe(toc, release.as_ref(), ripped);
 
@@ -757,6 +795,52 @@ async fn preview_track(
     Ok(tauri::ipc::Response::new(audio))
 }
 
+/// What one track hashed to and what the world makes of it.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct TrackVerification {
+    track: u8,
+    checksums: Checksums,
+    verdict: verify::ctdb::Verdict,
+}
+
+/// Compares the rip that just finished against everyone else's.
+///
+/// Asked for separately rather than done as part of the rip, so that a service
+/// being slow or down never holds up the audio, which is already on disk and
+/// correct whatever this says.
+#[tauri::command]
+async fn verify_rip(state: State<'_, AppState>) -> Result<Vec<TrackVerification>, MetadataError> {
+    let ripped = state
+        .ripped
+        .lock()
+        .expect("state lock is never held across a panic")
+        .clone();
+
+    let toc = state
+        .disc
+        .lock()
+        .expect("state lock is never held across a panic")
+        .clone();
+
+    let (Some(toc), false) = (toc, ripped.is_empty()) else {
+        return Ok(Vec::new());
+    };
+
+    let entries = state.verification.lookup(&toc).await?;
+    let verdicts = verify::ctdb::compare(&entries, &ripped);
+
+    Ok(ripped
+        .iter()
+        .zip(verdicts)
+        .map(|((track, checksums), verdict)| TrackVerification {
+            track: *track,
+            checksums: *checksums,
+            verdict,
+        })
+        .collect())
+}
+
 #[tauri::command]
 fn cancel_rip(state: State<'_, AppState>) {
     state.cancelled.store(true, Ordering::Relaxed);
@@ -791,6 +875,8 @@ fn main() {
                 store: Manual::new(discs),
                 cancelled: Arc::new(AtomicBool::new(false)),
                 artwork: Artworks::default(),
+                ripped: Arc::new(Mutex::new(Vec::new())),
+                verification: verify::ctdb::Verification::default(),
                 settings: Mutex::new(settings),
                 settings_path,
             });
@@ -815,6 +901,7 @@ fn main() {
             naming_tokens,
             formats,
             search_artwork,
+            verify_rip,
             cancel_rip,
             eject
         ])

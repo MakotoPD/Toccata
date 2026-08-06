@@ -8,6 +8,7 @@ const metadata = useMetadata()
 const release = useRelease()
 const ripping = useRip()
 const preview = usePreview()
+const verify = useVerify()
 const { settings, load: loadSettings } = useSettings()
 
 const coreVersion = ref<string | null>(null)
@@ -16,6 +17,11 @@ const searchOpen = ref(false)
 const coverOpen = ref(false)
 
 const toc = computed(() => disc.value?.toc ?? null)
+
+/** Worth explaining, since the usual cause is a setting rather than damage. */
+const mismatched = computed(() =>
+  verify.results.value.some((entry) => entry.verdict.state === 'different'),
+)
 
 /**
  * The path is recomputed whenever the names that build it change, so the panel
@@ -51,6 +57,7 @@ async function readDisc() {
   ripping.reset()
   metadata.reset()
   preview.stop()
+  verify.reset()
 
   await read()
 
@@ -72,17 +79,26 @@ async function ejectDisc() {
   ripping.reset()
   metadata.reset()
   preview.stop()
+  verify.reset()
   await eject()
 }
 
 async function ripDisc() {
-  if (selectedId.value) {
-    await ripping.start(
-      selectedId.value,
-      release.draft.value,
-      release.includedNumbers(toc.value),
-      metadata.cover.value,
-    )
+  if (!selectedId.value) {
+    return
+  }
+
+  verify.reset()
+  await ripping.start(
+    selectedId.value,
+    release.draft.value,
+    release.includedNumbers(toc.value),
+    metadata.cover.value,
+  )
+
+  // Only worth asking about a rip that actually finished.
+  if (!ripping.faultMessage.value) {
+    await verify.run()
   }
 }
 
@@ -289,6 +305,10 @@ const loud = `${action} border-brass-500 bg-brass-500/10 text-brass-400 hover:bg
       <p v-else-if="ripping.faultMessage.value" class="text-etch-400">
         {{ ripping.faultMessage.value }}
       </p>
+
+      <p v-if="verify.running.value" class="text-etch-600">{{ t('verify.running') }}</p>
+      <p v-else-if="verify.failed.value" class="text-etch-400">{{ t('verify.failed') }}</p>
+      <p v-else-if="mismatched" class="text-etch-400">{{ t('verify.offsetHint') }}</p>
 
       <p v-if="coreVersion" class="ml-auto font-mono">
         {{ t('about.core', { version: coreVersion }) }}

@@ -11,6 +11,7 @@ pub mod rip;
 pub mod settings;
 pub mod tag;
 pub mod toc;
+pub mod verify;
 
 /// Version of the ripping core, reported to the UI.
 pub fn version() -> &'static str {

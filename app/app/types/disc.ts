@@ -115,6 +115,24 @@ export type RipEvent =
   | { event: 'failed'; track: number; reason: RipFault }
   | { event: 'done'; folder: string; tracks: number; unreadableSectors: number }
 
+export interface Checksums {
+  /** The number EAC calls the copy CRC. */
+  crc32: number
+  accurateripV1: number
+  accurateripV2: number
+}
+
+export type Verdict =
+  | { state: 'accurate'; confidence: number }
+  | { state: 'different' }
+  | { state: 'unknown' }
+
+export interface TrackVerification {
+  track: number
+  checksums: Checksums
+  verdict: Verdict
+}
+
 export interface Artwork {
   sourceId: SourceId
   thumbnail: string
