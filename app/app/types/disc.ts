@@ -115,6 +115,16 @@ export type RipEvent =
   | { event: 'failed'; track: number; reason: RipFault }
   | { event: 'done'; folder: string; tracks: number; unreadableSectors: number }
 
+export interface TrackLyrics {
+  track: number
+  /** The words with no timing, which is what goes into a tag. */
+  plain: string | null
+  /** The same words with timestamps, which goes into an `.lrc` beside them. */
+  synced: string | null
+  /** Said by the database to have no words, which is an answer, not a miss. */
+  instrumental: boolean
+}
+
 export interface Checksums {
   /** The number EAC calls the copy CRC. */
   crc32: number

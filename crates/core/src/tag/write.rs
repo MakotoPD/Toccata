@@ -32,6 +32,24 @@ pub struct Extras<'a> {
     /// than declared, since it came from whatever service had it.
     pub cover: Option<&'a [u8]>,
     pub musicbrainz_release_id: Option<&'a str>,
+    /// The words with no timing. The timed version goes beside the file
+    /// instead, since a tag has nowhere sensible to keep it.
+    pub lyrics: Option<&'a str>,
+}
+
+/// Writes the timed lyrics beside the audio, as most players prefer to find
+/// them, and returns whether anything was written.
+///
+/// The file takes the audio's name with `.lrc` in place of its extension, which
+/// is the convention every player looks for.
+pub fn lrc(path: &Path, synced: &str) -> Result<bool, TagError> {
+    if synced.trim().is_empty() {
+        return Ok(false);
+    }
+
+    std::fs::write(path.with_extension("lrc"), synced)
+        .map(|()| true)
+        .map_err(|_| TagError::Write)
 }
 
 /// Writes the tags for one finished file.
@@ -60,6 +78,7 @@ pub fn track(
     put(&mut tag, ItemKey::Barcode, album.barcode.as_deref());
     put(&mut tag, ItemKey::Composer, extras.composer);
     put(&mut tag, ItemKey::Comment, extras.comment);
+    put(&mut tag, ItemKey::Lyrics, extras.lyrics);
     put(
         &mut tag,
         ItemKey::MusicBrainzReleaseId,
@@ -219,6 +238,39 @@ mod tests {
             assert_eq!(tag.title().as_deref(), Some("Track 1"), "{name}");
             assert_eq!(tag.album().as_deref(), Some("Reklamacja'47"), "{name}");
         }
+    }
+
+    #[test]
+    fn the_words_go_into_the_tag_and_the_timed_ones_beside_it() {
+        let path = encode(Format::Flac, "lyrics");
+        let album = album();
+
+        let extras = Extras {
+            lyrics: Some("Nie no, dobra"),
+            ..Extras::default()
+        };
+
+        track(&path, &album, &album.tracks[0], &extras).expect("the tags are written");
+        assert!(lrc(&path, "[00:12.00] Nie no, dobra").expect("the lrc is written"));
+
+        let tag = read_back(&path);
+        let beside = path.with_extension("lrc");
+        let timed = std::fs::read_to_string(&beside).expect("the lrc exists");
+
+        let _ = std::fs::remove_file(&path);
+        let _ = std::fs::remove_file(&beside);
+
+        assert_eq!(tag.get_string(ItemKey::Lyrics), Some("Nie no, dobra"));
+        assert_eq!(timed, "[00:12.00] Nie no, dobra");
+    }
+
+    // An empty `.lrc` beside every instrumental would be worse than none.
+    #[test]
+    fn nothing_is_written_beside_a_track_with_no_timed_words() {
+        let path = std::env::temp_dir().join("toccata-empty-lrc.flac");
+
+        assert!(!lrc(&path, "   ").expect("an empty write is not a failure"));
+        assert!(!path.with_extension("lrc").exists());
     }
 
     #[test]

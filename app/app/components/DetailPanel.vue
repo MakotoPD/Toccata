@@ -19,11 +19,12 @@ const track = computed(() =>
     : (release.value.tracks.find((entry) => entry.number === props.selected) ?? null),
 )
 
-const tab = ref<'tags' | 'encoder'>('tags')
+const tab = ref<'tags' | 'encoder' | 'lyrics'>('tags')
 
 const tabs = [
   { id: 'tags', label: 'panel.tags' },
   { id: 'encoder', label: 'panel.encoder' },
+  { id: 'lyrics', label: 'panel.lyrics' },
 ] as const
 </script>
 
@@ -67,7 +68,9 @@ const tabs = [
         </div>
       </template>
 
-      <EncoderSettings v-else :busy="busy" />
+      <EncoderSettings v-else-if="tab === 'encoder'" :busy="busy" />
+
+      <LyricsPanel v-else :selected="selected" :busy="busy" />
     </div>
   </section>
 </template>

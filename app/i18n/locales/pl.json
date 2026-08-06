@@ -150,7 +150,8 @@
     "encoder": "Enkoder",
     "forRelease": "Cała płyta",
     "forTrack": "Ścieżka {number}",
-    "hint": "Zaznacz ścieżkę na liście, żeby edytować ją osobno."
+    "hint": "Zaznacz ścieżkę na liście, żeby edytować ją osobno.",
+    "lyrics": "Teksty"
   },
   "encoder": {
     "formats": "Formaty",
@@ -219,5 +220,18 @@
     "running": "Porównywanie z innymi ripami",
     "failed": "Nie udało się porównać ripu: serwis nie odpowiedział.",
     "offsetHint": "Ścieżka, która z niczym się nie zgadza, to zwykle nieustawiony offset odczytu, a nie uszkodzona płyta."
+  },
+  "lyrics": {
+    "heading": "Teksty",
+    "searching": "szukanie",
+    "found": "{count} ścieżka ma tekst | {count} ścieżki mają tekst | {count} ścieżek ma tekst",
+    "hint": "Zaznacz ścieżkę na liście, żeby przeczytać albo poprawić jej tekst.",
+    "plain": "Tekst",
+    "synced": "Tekst z czasami",
+    "none": "Nic nie znaleziono. Co tu wpiszesz, trafi do tagu.",
+    "noneSynced": "Nic nie znaleziono.",
+    "syncedHint": "Zapisywany obok dźwięku jako plik .lrc, bo tam szukają go odtwarzacze.",
+    "fetch": "Znajdź teksty",
+    "nothing": "nic nie znaleziono"
   }
 }

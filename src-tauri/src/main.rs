@@ -3,6 +3,7 @@
 // Without this the release build spawns a console window alongside the app.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -15,6 +16,7 @@ use tauri::ipc::Channel;
 use tauri::{AppHandle, Manager, State};
 use toccata_core::drive::{self, DriveError, DriveInfo, SAMPLES_PER_SECTOR};
 use toccata_core::encode::{self, Format};
+use toccata_core::lyrics;
 use toccata_core::metadata::artwork::{Artwork, Artworks, Query as ArtworkQuery};
 use toccata_core::metadata::cover::{self, Covers};
 use toccata_core::metadata::discogs::Discogs;
@@ -50,6 +52,10 @@ struct AppState {
     /// an online check whenever it likes rather than only as the rip ends.
     ripped: Arc<Mutex<Vec<(u8, Checksums)>>>,
     verification: verify::ctdb::Verification,
+    lrclib: lyrics::Lrclib,
+    /// Words found for the disc on screen, by track number. Fetched before the
+    /// rip so they can be looked at and corrected before anything is written.
+    lyrics: Arc<Mutex<HashMap<u8, lyrics::Lyrics>>>,
     settings: Mutex<Settings>,
     /// Where the settings live, so saving does not have to ask again.
     settings_path: PathBuf,
@@ -455,6 +461,11 @@ async fn rip_disc(
     // looks perfect and matches nobody, which is the hardest kind of mistake
     // to notice.
     let hashed = state.ripped.clone();
+    let lyrics = state
+        .lyrics
+        .lock()
+        .expect("state lock is never held across a panic")
+        .clone();
 
     // The cover arrives as the data URI the window is showing, so what gets
     // embedded is what the user is looking at rather than a second download.
@@ -462,8 +473,8 @@ async fn rip_disc(
 
     tauri::async_runtime::spawn_blocking(move || {
         rip_all(
-            &drive_id, &toc, release, &tracks, &options, &root, &pattern, &formats, cover, &hashed,
-            &channel, &cancelled,
+            &drive_id, &toc, release, &tracks, &options, &root, &pattern, &formats, cover, &lyrics,
+            &hashed, &channel, &cancelled,
         )
     })
     .await
@@ -481,6 +492,7 @@ fn rip_all(
     pattern: &str,
     formats: &[(Format, Option<encode::Quality>)],
     cover: Option<Vec<u8>>,
+    lyrics: &HashMap<u8, lyrics::Lyrics>,
     // Where the checksums are left for the online check to pick up.
     hashed: &Mutex<Vec<(u8, Checksums)>>,
     channel: &Channel<RipEvent>,
@@ -651,7 +663,7 @@ fn rip_all(
             .filter_map(|per| per.get(index).cloned())
             .collect();
 
-        write_tags(&named, release.as_ref(), &files, cover.as_deref());
+        write_tags(&named, release.as_ref(), &files, cover.as_deref(), lyrics);
         write_artefacts(toc, &named, folder, &drive_name, options, started)?;
     }
 
@@ -712,6 +724,7 @@ fn write_tags(
     release: Option<&ReleaseCandidate>,
     files: &[PathBuf],
     cover: Option<&[u8]>,
+    lyrics: &HashMap<u8, lyrics::Lyrics>,
 ) {
     let extras = tag::write::Extras {
         composer: release.and_then(|release| release.composer.as_deref()),
@@ -723,10 +736,25 @@ fn write_tags(
         musicbrainz_release_id: release
             .filter(|release| release.source_id == SourceId::MusicBrainz)
             .map(|release| release.id.as_str()),
+        // Filled in per track below, since the words differ for each.
+        lyrics: None,
     };
 
     for (path, track) in files.iter().zip(&album.tracks) {
+        let words = lyrics.get(&track.number);
+
+        let extras = tag::write::Extras {
+            lyrics: words.and_then(|found| found.plain.as_deref()),
+            ..extras.clone()
+        };
+
         let _ = tag::write::track(path, album, track, &extras);
+
+        // Beside the audio rather than inside it: that is where players look
+        // for timed words, and a tag has nowhere sensible to keep them.
+        if let Some(synced) = words.and_then(|found| found.synced.as_deref()) {
+            let _ = tag::write::lrc(path, synced);
+        }
     }
 }
 
@@ -793,6 +821,90 @@ async fn preview_track(
     .map_err(|_| RipError::Write)??;
 
     Ok(tauri::ipc::Response::new(audio))
+}
+
+/// Words for one track, as the window shows and edits them.
+#[derive(Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct TrackLyrics {
+    track: u8,
+    #[serde(flatten)]
+    lyrics: lyrics::Lyrics,
+}
+
+/// Looks the whole disc up at LRCLIB, one track at a time.
+///
+/// Done before the rip rather than during it, so that what was found can be
+/// looked at and corrected before it is written into anything. Tracks that
+/// find nothing are simply absent from the answer.
+#[tauri::command]
+async fn fetch_lyrics(
+    release: ReleaseCandidate,
+    state: State<'_, AppState>,
+) -> Result<Vec<TrackLyrics>, lyrics::LyricsError> {
+    let toc = state
+        .disc
+        .lock()
+        .expect("state lock is never held across a panic")
+        .clone();
+
+    let Some(toc) = toc else {
+        return Ok(Vec::new());
+    };
+
+    let mut found = Vec::new();
+
+    for entry in &release.tracks {
+        let Some(track) = toc.tracks.iter().find(|track| track.number == entry.number) else {
+            continue;
+        };
+
+        // The length comes from the disc rather than from the database that
+        // named the track, since that is the one number nobody disagrees on.
+        let seconds = track.duration().as_secs() as u32;
+        let artist = match entry.artist.trim().is_empty() {
+            true => release.artist.as_str(),
+            false => entry.artist.as_str(),
+        };
+
+        // One track failing must not cost the rest of the disc its words.
+        if let Ok(Some(lyrics)) = state
+            .lrclib
+            .find(artist, &entry.title, &release.title, seconds)
+            .await
+        {
+            if !lyrics.is_empty() {
+                found.push(TrackLyrics {
+                    track: entry.number,
+                    lyrics,
+                });
+            }
+        }
+    }
+
+    *state
+        .lyrics
+        .lock()
+        .expect("state lock is never held across a panic") = found
+        .iter()
+        .map(|entry| (entry.track, entry.lyrics.clone()))
+        .collect();
+
+    Ok(found)
+}
+
+/// Replaces what was found with what the user decided, for one track.
+#[tauri::command]
+fn set_lyrics(entry: TrackLyrics, state: State<'_, AppState>) {
+    let mut held = state
+        .lyrics
+        .lock()
+        .expect("state lock is never held across a panic");
+
+    match entry.lyrics.is_empty() {
+        true => held.remove(&entry.track),
+        false => held.insert(entry.track, entry.lyrics),
+    };
 }
 
 /// What one track hashed to and what the world makes of it.
@@ -877,6 +989,8 @@ fn main() {
                 artwork: Artworks::default(),
                 ripped: Arc::new(Mutex::new(Vec::new())),
                 verification: verify::ctdb::Verification::default(),
+                lrclib: lyrics::Lrclib::default(),
+                lyrics: Arc::new(Mutex::new(HashMap::new())),
                 settings: Mutex::new(settings),
                 settings_path,
             });
@@ -900,6 +1014,8 @@ fn main() {
             set_settings,
             naming_tokens,
             formats,
+            fetch_lyrics,
+            set_lyrics,
             search_artwork,
             verify_rip,
             cancel_rip,

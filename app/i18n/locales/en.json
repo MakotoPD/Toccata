@@ -150,7 +150,8 @@
     "encoder": "Encoder",
     "forRelease": "Whole disc",
     "forTrack": "Track {number}",
-    "hint": "Pick a track in the list to edit that one instead."
+    "hint": "Pick a track in the list to edit that one instead.",
+    "lyrics": "Lyrics"
   },
   "encoder": {
     "formats": "Formats",
@@ -219,5 +220,18 @@
     "running": "Comparing against other rips",
     "failed": "The rip could not be compared: the service did not answer.",
     "offsetHint": "A track that matches nothing is usually a read offset that has not been set, rather than a damaged disc."
+  },
+  "lyrics": {
+    "heading": "Lyrics",
+    "searching": "looking them up",
+    "found": "{count} track has words | {count} tracks have words",
+    "hint": "Pick a track in the list to read or correct its words.",
+    "plain": "Words",
+    "synced": "Timed words",
+    "none": "Nothing was found. Anything typed here is written into the tag.",
+    "noneSynced": "Nothing was found.",
+    "syncedHint": "Written beside the audio as an .lrc file, which is where players look for it.",
+    "fetch": "Find lyrics",
+    "nothing": "nothing found"
   }
 }

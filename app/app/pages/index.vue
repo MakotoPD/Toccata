@@ -9,6 +9,7 @@ const release = useRelease()
 const ripping = useRip()
 const preview = usePreview()
 const verify = useVerify()
+const lyrics = useLyrics()
 const { settings, load: loadSettings } = useSettings()
 
 const coreVersion = ref<string | null>(null)
@@ -49,6 +50,10 @@ watch(
 watch(metadata.release, (candidate) => {
   if (candidate) {
     release.adopt(candidate, toc.value)
+
+    // Words are looked up as soon as there are titles to look them up by, so
+    // they can be read and corrected before the rip rather than after it.
+    void lyrics.fetchAll(release.draft.value)
   }
 })
 
@@ -58,6 +63,7 @@ async function readDisc() {
   metadata.reset()
   preview.stop()
   verify.reset()
+  lyrics.reset()
 
   await read()
 
@@ -80,6 +86,7 @@ async function ejectDisc() {
   metadata.reset()
   preview.stop()
   verify.reset()
+  lyrics.reset()
   await eject()
 }
 
