@@ -452,7 +452,7 @@ dependencies = [
 
 [[package]]
 name = "cdio-sys"
-version = "0.1.0"
+version = "1.0.0"
 
 [[package]]
 name = "cesu8"
@@ -4295,7 +4295,7 @@ dependencies = [
 
 [[package]]
 name = "toccata"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "serde",
  "tauri",
@@ -4308,7 +4308,7 @@ dependencies = [
 
 [[package]]
 name = "toccata-core"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "ffmpeg-next",
  "libc",
