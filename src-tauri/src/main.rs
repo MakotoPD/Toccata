@@ -455,6 +455,7 @@ async fn rip_disc(
     // Read before the settings are taken apart below.
     let options = Options {
         drive_offset: settings.drive_offset(&drive_id),
+        retries: rip::DEFAULT_RETRIES,
     };
 
     let pattern = settings.pattern;
@@ -630,6 +631,7 @@ fn rip_all(
                         .iter()
                         .any(|track| track.number == number && track.pre_emphasis),
                     unreadable_sectors: extracted.unreadable_sectors,
+                    recovered_sectors: extracted.recovered_sectors,
                     checksums,
                 });
                 written.push(files);

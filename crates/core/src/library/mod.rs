@@ -317,6 +317,7 @@ mod tests {
                     length: 13173,
                     pre_emphasis: false,
                     unreadable_sectors: 0,
+                    recovered_sectors: 0,
                     checksums: checksums(0x1a8e_cbaf),
                 },
                 RippedTrack {
@@ -327,6 +328,7 @@ mod tests {
                     length: 11344,
                     pre_emphasis: false,
                     unreadable_sectors: unreadable,
+                    recovered_sectors: 0,
                     checksums: checksums(0x0497_0de2),
                 },
             ],

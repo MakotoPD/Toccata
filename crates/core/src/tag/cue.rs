@@ -114,6 +114,7 @@ mod tests {
             length: 75 * 100,
             pre_emphasis: false,
             unreadable_sectors: 0,
+            recovered_sectors: 0,
             checksums: crate::verify::Checksums {
                 crc32: 0,
                 ctdb_crc32: 0,

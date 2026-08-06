@@ -56,6 +56,28 @@ pub struct Options {
     /// positive offset reads late, so the wanted audio sits that many samples
     /// further along than the table of contents says.
     pub drive_offset: i32,
+
+    /// How many further attempts a refused sector gets. Costs nothing on a
+    /// disc that reads cleanly, since it only runs after a failure.
+    #[serde(default = "default_retries")]
+    pub retries: u32,
+}
+
+fn default_retries() -> u32 {
+    DEFAULT_RETRIES
+}
+
+/// Enough for a disc that is dusty rather than damaged. Past this a sector is
+/// not coming back, and the time is better spent telling the user.
+pub const DEFAULT_RETRIES: u32 = 8;
+
+/// What a read cost, beyond the audio itself.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+struct Damage {
+    /// Sectors that needed asking twice but came back.
+    recovered: u32,
+    /// Sectors that never came back and were filled with silence.
+    unreadable: u32,
 }
 
 /// What a finished extraction produced.
@@ -64,9 +86,14 @@ pub struct Options {
 pub struct Extracted {
     pub track: u8,
     pub samples: u32,
-    /// Sectors the drive refused, filled with silence so the track keeps its
-    /// length. Anything above zero means the rip is not bit-perfect.
+    /// Sectors the drive refused even after retrying, filled with silence so
+    /// the track keeps its length. Anything above zero means the rip is not
+    /// bit-perfect.
     pub unreadable_sectors: u32,
+
+    /// Sectors that were refused at first and read on a later attempt. The
+    /// audio is whole, but the disc or the drive is not what it was.
+    pub recovered_sectors: u32,
 }
 
 /// Reads one track and writes its samples out.
@@ -103,7 +130,7 @@ pub fn track<W: Write>(
     let plan = Plan::new(first_sample, samples);
 
     let mut buffer = vec![0u8; CHUNK_SECTORS as usize * BYTES_PER_SECTOR];
-    let mut unreadable = 0;
+    let mut damage = Damage::default();
     let mut written = 0usize;
     let total_bytes = samples as usize * BYTES_PER_SAMPLE;
     let mut skip = plan.byte_offset;
@@ -121,7 +148,9 @@ pub fn track<W: Write>(
 
         // Audio wanted from before the first sector or past the lead-out does
         // not exist on the disc; the offset correction simply shifts silence in.
-        unreadable += read_clamped(drive, toc, sector, batch, filled)?;
+        let found = read_clamped(drive, toc, sector, batch, options.retries, filled)?;
+        damage.recovered += found.recovered;
+        damage.unreadable += found.unreadable;
 
         let usable = &filled[skip.min(filled.len())..];
         let take = usable.len().min(total_bytes - written);
@@ -142,7 +171,8 @@ pub fn track<W: Write>(
     Ok(Extracted {
         track: number,
         samples,
-        unreadable_sectors: unreadable,
+        unreadable_sectors: damage.unreadable,
+        recovered_sectors: damage.recovered,
     })
 }
 
@@ -183,7 +213,7 @@ pub fn preview<W: Write>(
         let batch = (sectors - done).min(CHUNK_SECTORS);
         let filled = &mut buffer[..batch as usize * BYTES_PER_SECTOR];
 
-        read_clamped(drive, toc, i64::from(track.start + done), batch, filled)?;
+        read_clamped(drive, toc, i64::from(track.start + done), batch, 0, filled)?;
         output.write_all(filled).map_err(|_| RipError::Write)?;
 
         done += batch;
@@ -202,8 +232,9 @@ fn read_clamped(
     toc: &Toc,
     start: i64,
     sectors: u32,
+    retries: u32,
     into: &mut [u8],
-) -> Result<u32, RipError> {
+) -> Result<Damage, RipError> {
     into.fill(0);
 
     let lead_out = i64::from(toc.lead_out);
@@ -211,7 +242,7 @@ fn read_clamped(
     let last = (start + i64::from(sectors)).min(lead_out);
 
     if last <= first {
-        return Ok(0);
+        return Ok(Damage::default());
     }
 
     let available = (last - first) as u32;
@@ -219,15 +250,58 @@ fn read_clamped(
     let slice = &mut into[offset..offset + available as usize * BYTES_PER_SECTOR];
 
     match drive.read_audio(first as u32, available, slice) {
-        Ok(()) => Ok(0),
+        Ok(()) => Ok(Damage::default()),
+
+        // A drive refuses the whole request over a single bad sector, so the
+        // run is taken apart and read one sector at a time. Without this, one
+        // scratch costs a second of audio instead of a seventy-fifth of one.
         Err(DriveError::UnreadableAudio { .. }) => {
-            // Keep going with silence rather than abandoning the track: the
-            // count travels back so the result can be reported as imperfect.
-            slice.fill(0);
-            Ok(available)
+            let mut damage = Damage::default();
+
+            for index in 0..available {
+                let sector = first as u32 + index;
+                let piece = &mut slice[index as usize * BYTES_PER_SECTOR..][..BYTES_PER_SECTOR];
+
+                match read_stubbornly(drive, sector, retries, piece) {
+                    Read::First => {}
+                    Read::Eventually => damage.recovered += 1,
+                    Read::Never => {
+                        piece.fill(0);
+                        damage.unreadable += 1;
+                    }
+                }
+            }
+
+            Ok(damage)
         }
+
         Err(error) => Err(error.into()),
     }
+}
+
+/// How one sector went.
+enum Read {
+    First,
+    Eventually,
+    Never,
+}
+
+/// Asks for one sector again and again.
+///
+/// Drives fail intermittently: a sector that is refused once often reads on the
+/// third attempt, because the head is asked to settle over the same spot again.
+/// Retrying is the cheapest error correction there is, and it costs nothing on
+/// a disc that reads cleanly, since it only ever runs after a failure.
+fn read_stubbornly(drive: &mut dyn Drive, sector: u32, retries: u32, into: &mut [u8]) -> Read {
+    for attempt in 0..=retries {
+        match drive.read_audio(sector, 1, into) {
+            Ok(()) if attempt == 0 => return Read::First,
+            Ok(()) => return Read::Eventually,
+            Err(_) => continue,
+        }
+    }
+
+    Read::Never
 }
 
 /// Where the wanted samples sit once the drive offset has moved them.
@@ -302,7 +376,11 @@ mod tests {
     /// say exactly which sectors they came from.
     struct Counting {
         info: crate::drive::DriveInfo,
+        /// Sector this drive will not read, whatever it is asked.
         refuse: Option<u32>,
+        /// Sector this drive refuses until it has been asked this many times,
+        /// which is how a real drive behaves over a smudge.
+        sticky: Option<(u32, u32)>,
     }
 
     impl Drive for Counting {
@@ -320,13 +398,31 @@ mod tests {
             sectors: u32,
             into: &mut [u8],
         ) -> Result<(), DriveError> {
-            if self.refuse == Some(start) {
+            let refused =
+                |first: u32| (first..first + sectors).any(|sector| Some(sector) == self.refuse);
+
+            if refused(start) {
                 return Err(DriveError::UnreadableAudio {
                     device: self.info.id.clone(),
                     start,
                     sectors,
                     status: 0,
                 });
+            }
+
+            if let Some((sector, left)) = self.sticky
+                && (start..start + sectors).contains(&sector)
+            {
+                self.sticky = Some((sector, left.saturating_sub(1)));
+
+                if left > 0 {
+                    return Err(DriveError::UnreadableAudio {
+                        device: self.info.id.clone(),
+                        start,
+                        sectors,
+                        status: 0,
+                    });
+                }
             }
 
             for sector in 0..sectors as usize {
@@ -369,6 +465,7 @@ mod tests {
                     name: "test".to_owned(),
                 },
                 refuse: None,
+                sticky: None,
             },
             Toc::from_entries(&entries, 20).unwrap(),
         )
@@ -382,6 +479,7 @@ mod tests {
             number,
             &Options {
                 drive_offset: offset,
+                retries: DEFAULT_RETRIES,
             },
             &mut out,
             &mut |_, _| {},
@@ -435,15 +533,61 @@ mod tests {
         );
     }
 
+    // One bad sector used to cost a whole second of audio, because a drive
+    // refuses the entire request it was given. Only the bad sector should be
+    // lost.
     #[test]
-    fn a_refused_sector_is_silenced_and_counted() {
+    fn one_bad_sector_costs_one_sector() {
         let (mut drive, toc) = disc();
-        drive.refuse = Some(10);
+        drive.refuse = Some(12);
 
         let (out, extracted) = rip(&mut drive, &toc, 2, 0);
 
-        assert_eq!(extracted.unreadable_sectors, 10);
-        assert!(out.iter().all(|byte| *byte == 0));
+        assert_eq!(extracted.unreadable_sectors, 1);
+        assert_eq!(extracted.recovered_sectors, 0);
+
+        // Track two starts at sector ten, so the third sector of it is silent
+        // and its neighbours are not.
+        let sector = |index: usize| {
+            let at = index * BYTES_PER_SECTOR;
+            u16::from_le_bytes(out[at..at + 2].try_into().unwrap())
+        };
+
+        assert_eq!(sector(1), 11);
+        assert_eq!(sector(2), 0, "the refused sector");
+        assert_eq!(sector(3), 13);
+    }
+
+    // Drives fail intermittently, and asking again is the cheapest error
+    // correction there is.
+    #[test]
+    fn a_sector_that_reads_on_a_later_attempt_is_kept() {
+        let (mut drive, toc) = disc();
+        drive.sticky = Some((12, 3));
+
+        let (out, extracted) = rip(&mut drive, &toc, 2, 0);
+
+        assert_eq!(extracted.unreadable_sectors, 0, "nothing was lost");
+        assert_eq!(extracted.recovered_sectors, 1, "but it took asking again");
+
+        let at = 2 * BYTES_PER_SECTOR;
+        assert_eq!(
+            u16::from_le_bytes(out[at..at + 2].try_into().unwrap()),
+            12,
+            "the audio is the real thing, not silence"
+        );
+    }
+
+    #[test]
+    fn a_sector_that_never_reads_is_given_up_on() {
+        let (mut drive, toc) = disc();
+        // More than the retries allow, so it is refused for good.
+        drive.sticky = Some((12, DEFAULT_RETRIES + 5));
+
+        let (_, extracted) = rip(&mut drive, &toc, 2, 0);
+
+        assert_eq!(extracted.unreadable_sectors, 1);
+        assert_eq!(extracted.recovered_sectors, 0);
     }
 
     #[test]

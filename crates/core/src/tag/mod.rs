@@ -25,6 +25,10 @@ pub struct RippedTrack {
     /// zero means the rip is not bit-perfect.
     pub unreadable_sectors: u32,
 
+    /// Sectors that were refused at first and read on a later attempt. The
+    /// audio is whole; the disc is telling you it is getting on.
+    pub recovered_sectors: u32,
+
     /// What the audio hashed to, which is what the log reports and what any
     /// comparison against other people's rips is made on.
     pub checksums: crate::verify::Checksums,
@@ -52,6 +56,13 @@ impl Album {
         self.tracks
             .iter()
             .map(|track| track.unreadable_sectors)
+            .sum()
+    }
+
+    pub fn recovered_sectors(&self) -> u32 {
+        self.tracks
+            .iter()
+            .map(|track| track.recovered_sectors)
             .sum()
     }
 }

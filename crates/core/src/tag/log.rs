@@ -84,6 +84,16 @@ pub fn write(conditions: &Conditions, album: &Album) -> String {
         ),
     };
 
+    // Worth saying even when the rip came out whole: a disc that needed asking
+    // twice today will need asking three times next year.
+    if album.recovered_sectors() > 0 {
+        let _ = writeln!(
+            out,
+            "{} read only after retrying, so the audio is whole but the disc is not what it was.",
+            plural(album.recovered_sectors(), "sector")
+        );
+    }
+
     out
 }
 
@@ -188,6 +198,7 @@ mod tests {
                     length: 176 * FRAMES_PER_SECOND,
                     pre_emphasis: false,
                     unreadable_sectors: 0,
+                    recovered_sectors: 0,
                     checksums: crate::verify::Checksums {
                         crc32: 0,
                         ctdb_crc32: 0,
@@ -203,6 +214,7 @@ mod tests {
                     length: 151 * FRAMES_PER_SECOND,
                     pre_emphasis: false,
                     unreadable_sectors: unreadable,
+                    recovered_sectors: 0,
                     checksums: crate::verify::Checksums {
                         crc32: 0,
                         ctdb_crc32: 0,
