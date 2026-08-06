@@ -181,7 +181,8 @@
   },
   "menu": {
     "search": "Znajdź metadane",
-    "label": "Więcej"
+    "label": "Więcej",
+    "history": "Historia"
   },
   "error": {
     "drive": {
@@ -233,5 +234,18 @@
     "syncedHint": "Zapisywany obok dźwięku jako plik .lrc, bo tam szukają go odtwarzacze.",
     "fetch": "Znajdź teksty",
     "nothing": "nic nie znaleziono"
+  },
+  "history": {
+    "heading": "Co zostało zgrane",
+    "history": "Historia",
+    "tokens": "Klucze",
+    "empty": "Nic jeszcze nie zostało zgrane.",
+    "tracksOf": "Ścieżki wydania {title}",
+    "forget": "Zapomnij",
+    "perfect": "Bit w bit",
+    "imperfect": "{count} zły sektor | {count} złe sektory | {count} złych sektorów",
+    "discogsHint": "Podnosi limit zapytań, który Discogs daje anonimowym, i odsłania pola niewidoczne bez klucza.",
+    "lastfmHint": "Tagi Last.fm są lepszym źródłem gatunku niż MusicBrainz.",
+    "tokensHint": "Oba są opcjonalne. Wszystko działa bez nich, a żaden nie trafia nigdzie poza serwis, do którego należy. Trzymane są w Twoim pliku ustawień."
   }
 }

@@ -20,6 +20,11 @@ lofty = "0.24.0"
 # OpenSSL that Tauri already requires on Linux cost nothing extra.
 reqwest = { version = "0.13.4", default-features = false, features = ["native-tls", "json", "charset", "http2", "gzip", "system-proxy", "query"] }
 roxmltree = "0.21.1"
+# Held at 0.37: 0.40 pulls libsqlite3-sys 0.38, whose build script uses
+# `cfg_select!` and therefore wants a nightly compiler. SQLite is bundled
+# rather than taken from the system, which is what keeps the build identical
+# on all three platforms.
+rusqlite = { version = "0.37", features = ["bundled"] }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"
 sha1 = "0.11.0"

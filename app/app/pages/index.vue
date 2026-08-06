@@ -16,6 +16,7 @@ const coreVersion = ref<string | null>(null)
 const folder = ref<string | null>(null)
 const searchOpen = ref(false)
 const coverOpen = ref(false)
+const historyOpen = ref(false)
 
 const toc = computed(() => disc.value?.toc ?? null)
 
@@ -180,6 +181,10 @@ const loud = `${action} border-brass-500 bg-brass-500/10 text-brass-400 hover:bg
         {{ t('editor.save') }}
       </button>
 
+      <button :class="quiet" @click="historyOpen = true">
+        {{ t('menu.history') }}
+      </button>
+
       <div class="ml-auto flex items-center gap-3">
         <p
           v-if="metadata.release.value"
@@ -328,6 +333,8 @@ const loud = `${action} border-brass-500 bg-brass-500/10 text-brass-400 hover:bg
       @close="coverOpen = false"
       @pick="metadata.cover.value = $event"
     />
+
+    <HistoryDialog v-if="historyOpen" @close="historyOpen = false" />
 
     <MetadataSearchDialog
       v-if="searchOpen && disc"

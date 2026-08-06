@@ -25,12 +25,22 @@ use crate::drive::{BYTES_PER_SAMPLE, SAMPLES_PER_SECTOR};
 /// whole reason the rule exists.
 const SKIPPED_SAMPLES: u32 = 5 * SAMPLES_PER_SECTOR;
 
+/// Samples CTDB leaves out of the first track's checksum, being the first ten
+/// sectors of the disc. Found by matching a real rip against what the service
+/// holds for it, since no document says so.
+const CTDB_LEAD_IN: u32 = 10 * SAMPLES_PER_SECTOR;
+
 /// What one track hashed to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Checksums {
-    /// The number EAC calls the copy CRC.
+    /// Over the whole track, which is the number EAC calls the copy CRC.
     pub crc32: u32,
+
+    /// The same thing under CTDB's convention, which leaves the first ten
+    /// sectors of the disc out. Equal to `crc32` on every track but the first.
+    pub ctdb_crc32: u32,
+
     pub accuraterip_v1: u32,
     pub accuraterip_v2: u32,
 }
@@ -43,6 +53,11 @@ pub struct Checksums {
 #[derive(Debug, Clone)]
 pub struct Verifier {
     crc: u32,
+    /// Started late on the first track, which is the only thing separating
+    /// CTDB's number from EAC's.
+    ctdb: u32,
+    /// Samples still to pass before the CTDB checksum starts counting.
+    ctdb_skip: u32,
     v1: u32,
     v2: u32,
     /// Position of the next sample, counting from one across the whole track.
@@ -61,6 +76,8 @@ impl Verifier {
     pub fn new(samples: u32, first_track: bool, last_track: bool) -> Self {
         Self {
             crc: 0xFFFF_FFFF,
+            ctdb: 0xFFFF_FFFF,
+            ctdb_skip: if first_track { CTDB_LEAD_IN } else { 0 },
             v1: 0,
             v2: 0,
             position: 1,
@@ -81,6 +98,7 @@ impl Verifier {
     pub fn finish(self) -> Checksums {
         Checksums {
             crc32: self.crc ^ 0xFFFF_FFFF,
+            ctdb_crc32: self.ctdb ^ 0xFFFF_FFFF,
             accuraterip_v1: self.v1,
             accuraterip_v2: self.v2,
         }
@@ -110,6 +128,13 @@ impl Verifier {
 impl Write for Verifier {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         self.crc = crc32(self.crc, buf);
+
+        // The same bytes again, minus the disc's first ten sectors. Counted in
+        // bytes rather than samples because a checksum does not care where a
+        // sample begins.
+        let skipped = (self.ctdb_skip as usize * BYTES_PER_SAMPLE).min(buf.len());
+        self.ctdb_skip -= (skipped / BYTES_PER_SAMPLE) as u32;
+        self.ctdb = crc32(self.ctdb, &buf[skipped..]);
 
         let mut rest = buf;
 
@@ -328,6 +353,43 @@ mod tests {
 
             assert_eq!(verifier.finish(), whole, "chunks of {chunk}");
         }
+    }
+
+    // The first track's number is the one CTDB compares against, and it is
+    // not the one EAC prints. Both have to come out of the same pass.
+    #[test]
+    fn the_first_track_carries_two_different_checksums() {
+        let audio = vec![7u8; (CTDB_LEAD_IN as usize + 100) * BYTES_PER_SAMPLE];
+
+        let first = {
+            let mut verifier = Verifier::new(CTDB_LEAD_IN + 100, true, false);
+            verifier.write_all(&audio).unwrap();
+            verifier.finish()
+        };
+
+        let middle = {
+            let mut verifier = Verifier::new(CTDB_LEAD_IN + 100, false, false);
+            verifier.write_all(&audio).unwrap();
+            verifier.finish()
+        };
+
+        assert_ne!(
+            first.crc32, first.ctdb_crc32,
+            "the first track skips a lead in"
+        );
+        assert_eq!(
+            first.ctdb_crc32,
+            crc32(
+                0xFFFF_FFFF,
+                &audio[CTDB_LEAD_IN as usize * BYTES_PER_SAMPLE..]
+            ) ^ 0xFFFF_FFFF
+        );
+
+        assert_eq!(
+            middle.crc32, middle.ctdb_crc32,
+            "every other track counts the whole of itself"
+        );
+        assert_eq!(first.crc32, middle.crc32);
     }
 
     #[test]

@@ -40,6 +40,44 @@ pub struct Settings {
     /// swapping drives does not silently ruin a rip.
     #[serde(default)]
     pub drive_offsets: std::collections::HashMap<String, i32>,
+
+    /// Keys for the services that ask for one. Every one of them is optional
+    /// and the application is fully usable without any: a key buys a higher
+    /// rate limit or an extra source, never the basic function.
+    ///
+    /// These live here, in the user's own settings file, and never in the
+    /// repository.
+    #[serde(default)]
+    pub tokens: Tokens,
+}
+
+/// Keys the user has supplied, one per service.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Tokens {
+    /// Raises Discogs' rate limit from the anonymous one and unlocks the
+    /// fields an anonymous request does not see.
+    #[serde(default)]
+    pub discogs: Option<String>,
+
+    /// Last.fm, whose tags are a better source of genre than MusicBrainz.
+    #[serde(default)]
+    pub lastfm: Option<String>,
+}
+
+impl Tokens {
+    /// A token, or nothing when it is missing or has only spaces in it.
+    pub fn discogs(&self) -> Option<&str> {
+        present(self.discogs.as_deref())
+    }
+
+    pub fn lastfm(&self) -> Option<&str> {
+        present(self.lastfm.as_deref())
+    }
+}
+
+fn present(value: Option<&str>) -> Option<&str> {
+    value.map(str::trim).filter(|value| !value.is_empty())
 }
 
 fn default_pattern() -> String {
@@ -58,6 +96,7 @@ impl Default for Settings {
             formats: default_formats(),
             qualities: std::collections::HashMap::new(),
             drive_offsets: std::collections::HashMap::new(),
+            tokens: Tokens::default(),
         }
     }
 }
@@ -133,6 +172,20 @@ mod tests {
         assert_eq!(loaded.drive_offset(r"\\.\E:"), 6);
 
         let _ = fs::remove_file(path);
+    }
+
+    // A key with nothing in it must read as no key, or every request goes out
+    // claiming an authorisation it does not have.
+    #[test]
+    fn a_blank_token_is_no_token() {
+        let tokens = Tokens {
+            discogs: Some("   ".to_owned()),
+            lastfm: Some("abc123".to_owned()),
+        };
+
+        assert_eq!(tokens.discogs(), None);
+        assert_eq!(tokens.lastfm(), Some("abc123"));
+        assert_eq!(Tokens::default().lastfm(), None);
     }
 
     #[test]

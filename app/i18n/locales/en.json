@@ -181,7 +181,8 @@
   },
   "menu": {
     "search": "Find metadata",
-    "label": "More"
+    "label": "More",
+    "history": "History"
   },
   "error": {
     "drive": {
@@ -233,5 +234,18 @@
     "syncedHint": "Written beside the audio as an .lrc file, which is where players look for it.",
     "fetch": "Find lyrics",
     "nothing": "nothing found"
+  },
+  "history": {
+    "heading": "What has been ripped",
+    "history": "History",
+    "tokens": "Keys",
+    "empty": "Nothing has been ripped yet.",
+    "tracksOf": "Tracks of {title}",
+    "forget": "Forget",
+    "perfect": "Bit-perfect",
+    "imperfect": "{count} bad sector | {count} bad sectors",
+    "discogsHint": "Raises the rate limit Discogs gives anonymous callers and unlocks fields they cannot see.",
+    "lastfmHint": "Last.fm tags are a better source of genre than MusicBrainz.",
+    "tokensHint": "Both are optional. Everything works without them, and neither is ever sent anywhere but to the service it belongs to. They are kept in your own settings file."
   }
 }

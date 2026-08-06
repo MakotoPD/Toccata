@@ -16,6 +16,7 @@ use tauri::ipc::Channel;
 use tauri::{AppHandle, Manager, State};
 use toccata_core::drive::{self, DriveError, DriveInfo, SAMPLES_PER_SECTOR};
 use toccata_core::encode::{self, Format};
+use toccata_core::library;
 use toccata_core::lyrics;
 use toccata_core::metadata::artwork::{Artwork, Artworks, Query as ArtworkQuery};
 use toccata_core::metadata::cover::{self, Covers};
@@ -53,6 +54,9 @@ struct AppState {
     ripped: Arc<Mutex<Vec<(u8, Checksums)>>>,
     verification: verify::ctdb::Verification,
     lrclib: lyrics::Lrclib,
+    /// What has been ripped before. Absent when the database refused to open,
+    /// which costs the history and nothing else.
+    library: Arc<Mutex<Option<library::Library>>>,
     /// Words found for the disc on screen, by track number. Fetched before the
     /// rip so they can be looked at and corrected before anything is written.
     lyrics: Arc<Mutex<HashMap<u8, lyrics::Lyrics>>>,
@@ -227,6 +231,10 @@ fn set_settings(settings: Settings, state: State<'_, AppState>) -> Result<(), Me
         .map_err(|_| MetadataError::Unreadable {
             source_id: SourceId::Manual,
         })?;
+
+    // The clients hold the keys, so they are handed over here rather than
+    // looked up on every request.
+    state.discogs.set_token(settings.tokens.discogs());
 
     *state
         .settings
@@ -461,6 +469,7 @@ async fn rip_disc(
     // looks perfect and matches nobody, which is the hardest kind of mistake
     // to notice.
     let hashed = state.ripped.clone();
+    let recorded = state.library.clone();
     let lyrics = state
         .lyrics
         .lock()
@@ -474,7 +483,7 @@ async fn rip_disc(
     tauri::async_runtime::spawn_blocking(move || {
         rip_all(
             &drive_id, &toc, release, &tracks, &options, &root, &pattern, &formats, cover, &lyrics,
-            &hashed, &channel, &cancelled,
+            &hashed, &recorded, &channel, &cancelled,
         )
     })
     .await
@@ -495,6 +504,7 @@ fn rip_all(
     lyrics: &HashMap<u8, lyrics::Lyrics>,
     // Where the checksums are left for the online check to pick up.
     hashed: &Mutex<Vec<(u8, Checksums)>>,
+    recorded: &Mutex<Option<library::Library>>,
     channel: &Channel<RipEvent>,
     cancelled: &AtomicBool,
 ) -> Result<(), RipError> {
@@ -653,6 +663,22 @@ fn rip_all(
         .collect();
 
     let album = describe(toc, release.as_ref(), ripped);
+
+    // Filed under the disc identifier rather than the folder, since a folder
+    // can be moved or renamed and the disc cannot.
+    if let Some(library) = recorded
+        .lock()
+        .expect("state lock is never held across a panic")
+        .as_mut()
+    {
+        let _ = library.record(
+            &toc.musicbrainz_disc_id(),
+            &album,
+            &root.display().to_string(),
+            &drive_name,
+            options.drive_offset,
+        );
+    }
 
     // Each format is a finished album of its own: its own files to tag, its
     // own cue sheet naming them, its own copy of the log beside them.
@@ -907,6 +933,60 @@ fn set_lyrics(entry: TrackLyrics, state: State<'_, AppState>) {
     };
 }
 
+/// The rips that have already happened, newest first.
+#[tauri::command]
+fn rip_history(limit: u32, state: State<'_, AppState>) -> Vec<library::Entry> {
+    state
+        .library
+        .lock()
+        .expect("state lock is never held across a panic")
+        .as_ref()
+        .and_then(|library| library.history(limit).ok())
+        .unwrap_or_default()
+}
+
+/// Every earlier rip of the disc currently in the drive, so that putting one
+/// in a second time says so before anything is written again.
+#[tauri::command]
+fn disc_history(state: State<'_, AppState>) -> Vec<library::Entry> {
+    let Some(disc_id) = current_disc_id(&state) else {
+        return Vec::new();
+    };
+
+    state
+        .library
+        .lock()
+        .expect("state lock is never held across a panic")
+        .as_ref()
+        .and_then(|library| library.by_disc(&disc_id).ok())
+        .unwrap_or_default()
+}
+
+#[tauri::command]
+fn rip_tracks(rip: i64, state: State<'_, AppState>) -> Vec<library::TrackEntry> {
+    state
+        .library
+        .lock()
+        .expect("state lock is never held across a panic")
+        .as_ref()
+        .and_then(|library| library.tracks(rip).ok())
+        .unwrap_or_default()
+}
+
+/// Drops one rip from the history. The files stay where they are: this is a
+/// record of what happened, not the music.
+#[tauri::command]
+fn forget_rip(rip: i64, state: State<'_, AppState>) {
+    if let Some(library) = state
+        .library
+        .lock()
+        .expect("state lock is never held across a panic")
+        .as_ref()
+    {
+        let _ = library.forget(rip);
+    }
+}
+
 /// What one track hashed to and what the world makes of it.
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -939,8 +1019,14 @@ async fn verify_rip(state: State<'_, AppState>) -> Result<Vec<TrackVerification>
         return Ok(Vec::new());
     };
 
+    let last = toc
+        .tracks
+        .iter()
+        .rfind(|track| track.audio)
+        .map_or(0, |track| track.number);
+
     let entries = state.verification.lookup(&toc).await?;
-    let verdicts = verify::ctdb::compare(&entries, &ripped);
+    let verdicts = verify::ctdb::compare(&entries, &ripped, last);
 
     Ok(ripped
         .iter()
@@ -978,18 +1064,24 @@ fn main() {
             let settings_path = app.path().app_data_dir()?.join("settings.json");
             let settings = Settings::load(&settings_path);
 
+            let discogs = Discogs::default();
+            discogs.set_token(settings.tokens.discogs());
+
             app.manage(AppState {
                 disc: Mutex::new(None),
                 metadata: Cascade::standard(&discs),
                 covers: Covers::default(),
                 search: MusicBrainz::default(),
-                discogs: Discogs::default(),
+                discogs,
                 store: Manual::new(discs),
                 cancelled: Arc::new(AtomicBool::new(false)),
                 artwork: Artworks::default(),
                 ripped: Arc::new(Mutex::new(Vec::new())),
                 verification: verify::ctdb::Verification::default(),
                 lrclib: lyrics::Lrclib::default(),
+                library: Arc::new(Mutex::new(
+                    library::Library::open(&app.path().app_data_dir()?.join("library.db")).ok(),
+                )),
                 lyrics: Arc::new(Mutex::new(HashMap::new())),
                 settings: Mutex::new(settings),
                 settings_path,
@@ -1018,6 +1110,10 @@ fn main() {
             set_lyrics,
             search_artwork,
             verify_rip,
+            rip_history,
+            disc_history,
+            rip_tracks,
+            forget_rip,
             cancel_rip,
             eject
         ])

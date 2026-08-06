@@ -115,6 +115,30 @@ export type RipEvent =
   | { event: 'failed'; track: number; reason: RipFault }
   | { event: 'done'; folder: string; tracks: number; unreadableSectors: number }
 
+/** One rip that already happened, as the history keeps it. */
+export interface RipEntry {
+  id: number
+  musicbrainzDiscId: string
+  artist: string
+  title: string
+  folder: string
+  drive: string
+  readOffset: number
+  /** Seconds since the epoch. */
+  rippedAt: number
+  tracks: number
+  unreadableSectors: number
+}
+
+export interface RipTrackEntry {
+  number: number
+  title: string
+  crc32: number
+  accurateripV1: number
+  accurateripV2: number
+  unreadableSectors: number
+}
+
 export interface TrackLyrics {
   track: number
   /** The words with no timing, which is what goes into a tag. */
@@ -194,4 +218,6 @@ export interface Settings {
   /** Absent entries fall back to the format's own default. */
   qualities: Partial<Record<Format, Quality>>
   driveOffsets: Record<string, number>
+  /** Every one optional: a key buys a higher rate limit, never the function. */
+  tokens: { discogs: string | null; lastfm: string | null }
 }

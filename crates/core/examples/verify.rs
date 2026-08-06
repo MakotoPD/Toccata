@@ -47,10 +47,15 @@ async fn main() {
         entries.iter().map(|entry| entry.confidence).max().unwrap()
     });
 
-    // A short track in the middle: no AccurateRip skipping to think about, and
-    // it reads quickly.
+    // A track in the middle by default, since the ends of a disc are where the
+    // conventions differ. Any track can be named as an argument.
     let audio: Vec<_> = toc.tracks.iter().filter(|track| track.audio).collect();
-    let index = audio.len() / 2;
+    let index = std::env::args()
+        .nth(1)
+        .and_then(|argument| argument.parse::<usize>().ok())
+        .map_or(audio.len() / 2, |number| number.saturating_sub(1))
+        .min(audio.len() - 1);
+
     let track = audio[index];
 
     let padding = RANGE.unsigned_abs().div_ceil(SAMPLES_PER_SECTOR) + 1;
@@ -84,8 +89,20 @@ async fn main() {
 
     println!("looking for {wanted:08x?}");
 
+    let samples = buffer.len() / BYTES_PER_SAMPLE;
+
     for offset in -RANGE..=RANGE {
-        let start = (base as i32 + offset) as usize;
+        // The first track has nothing before sector zero, so the window simply
+        // cannot be moved that way and those offsets are skipped.
+        let Some(start) = (base as i64 + i64::from(offset)).try_into().ok() else {
+            continue;
+        };
+
+        let start: usize = start;
+        if start + length > samples {
+            continue;
+        }
+
         let window = &buffer[start * BYTES_PER_SAMPLE..(start + length) * BYTES_PER_SAMPLE];
 
         let mut verifier = Verifier::new(track.length * SAMPLES_PER_SECTOR, false, false);

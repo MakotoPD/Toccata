@@ -26,6 +26,9 @@ const TIMEOUT: Duration = Duration::from_secs(20);
 
 pub struct Discogs {
     client: reqwest::Client,
+    /// Set only when the user has supplied one. Without it everything still
+    /// works, at the lower rate limit Discogs gives anonymous callers.
+    token: std::sync::Mutex<Option<String>>,
 }
 
 impl Default for Discogs {
@@ -36,11 +39,35 @@ impl Default for Discogs {
                 .timeout(TIMEOUT)
                 .build()
                 .expect("the http client has no configuration that can fail"),
+            token: std::sync::Mutex::new(None),
         }
     }
 }
 
 impl Discogs {
+    /// Takes the key the user has put in the settings, or clears it.
+    pub fn set_token(&self, token: Option<&str>) {
+        *self
+            .token
+            .lock()
+            .expect("the token lock is never held across a panic") = token.map(str::to_owned);
+    }
+
+    /// Discogs takes the key as a header rather than a query parameter, which
+    /// keeps it out of logs and out of anything that records addresses.
+    fn authorised(&self, request: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
+        let token = self
+            .token
+            .lock()
+            .expect("the token lock is never held across a panic")
+            .clone();
+
+        match token {
+            Some(token) => request.header("Authorization", format!("Discogs token={token}")),
+            None => request,
+        }
+    }
+
     pub async fn search(
         &self,
         artist: &str,
@@ -69,9 +96,11 @@ impl Discogs {
 
     async fn run(&self, query: &[(&str, &str)]) -> Result<Vec<ReleaseCandidate>, MetadataError> {
         let response = self
-            .client
-            .get(format!("{BASE_URL}/database/search"))
-            .query(query)
+            .authorised(
+                self.client
+                    .get(format!("{BASE_URL}/database/search"))
+                    .query(query),
+            )
             .send()
             .await
             .map_err(|_| MetadataError::Unreachable {
@@ -103,8 +132,7 @@ impl Discogs {
         };
 
         let response = self
-            .client
-            .get(format!("{BASE_URL}/releases/{id}"))
+            .authorised(self.client.get(format!("{BASE_URL}/releases/{id}")))
             .send()
             .await
             .map_err(|_| MetadataError::Unreachable {

@@ -5,6 +5,7 @@ mod base64;
 pub mod discid;
 pub mod drive;
 pub mod encode;
+pub mod library;
 pub mod lyrics;
 pub mod metadata;
 pub mod naming;

@@ -11,6 +11,21 @@
 //! is a drive read offset that has not been set, which shifts every sample and
 //! changes every checksum while the audio itself is perfectly readable. The
 //! interface has to say that, or the first mismatch will be read as damage.
+//!
+//! # The edges of the disc
+//!
+//! CTDB's per-track checksums are plain CRC32s of the track's audio, except at
+//! the two ends of the disc, where its numbers come from a region trimmed to
+//! whole parity strides. Measured against a disc the service already held:
+//!
+//! * the first track's checksum starts 5880 samples in, which is one stride;
+//! * the last track's ends 10584 samples early, which is not a round anything.
+//!
+//! Together those cover exactly 10272 strides of a disc holding 10274.8 of
+//! them, and one disc is not enough to say where the missing two went. The
+//! head is therefore reproduced and the tail is not: the last track is
+//! reported as unknown rather than guessed at, since a verifier that cries
+//! wolf on every disc is worse than one that admits what it cannot check.
 
 use std::time::Duration;
 
@@ -151,9 +166,17 @@ fn parse(body: &str) -> Result<Vec<Entry>, MetadataError> {
 /// disc. Confidences add up across entries: two people who each arrived at the
 /// same numbers separately are two people who agree, and that is worth more
 /// than whichever entry happened to be listed first.
-pub fn compare(entries: &[Entry], ours: &[(u8, Checksums)]) -> Vec<Verdict> {
+pub fn compare(entries: &[Entry], ours: &[(u8, Checksums)], last_track: u8) -> Vec<Verdict> {
     ours.iter()
         .map(|(number, checksums)| {
+            // The last track's number cannot be reproduced yet, so it is
+            // reported as unknown rather than as a mismatch. Saying "no match"
+            // on the last track of every disc would be worse than saying
+            // nothing: the one thing a verifier must not do is cry wolf.
+            if *number == last_track {
+                return Verdict::Unknown;
+            }
+
             let index = usize::from(*number).saturating_sub(1);
 
             let known: Vec<&Entry> = entries
@@ -167,7 +190,7 @@ pub fn compare(entries: &[Entry], ours: &[(u8, Checksums)]) -> Vec<Verdict> {
 
             let confidence: u32 = known
                 .iter()
-                .filter(|entry| entry.track_crcs[index] == checksums.crc32)
+                .filter(|entry| entry.track_crcs[index] == checksums.ctdb_crc32)
                 .map(|entry| entry.confidence)
                 .sum();
 
@@ -193,6 +216,7 @@ mod tests {
     fn checksums(crc32: u32) -> Checksums {
         Checksums {
             crc32,
+            ctdb_crc32: crc32,
             accuraterip_v1: 0,
             accuraterip_v2: 0,
         }
@@ -215,7 +239,7 @@ mod tests {
         let ours = vec![(1, checksums(0x1a8e_cbaf)), (2, checksums(0xdead_beef))];
 
         assert_eq!(
-            compare(&entries, &ours),
+            compare(&entries, &ours, 7),
             vec![Verdict::Accurate { confidence: 10 }, Verdict::Different]
         );
     }
@@ -227,11 +251,11 @@ mod tests {
         let entries = parse(ANSWER).unwrap();
 
         assert_eq!(
-            compare(&entries, &[(6, checksums(0x62db_1881))]),
+            compare(&entries, &[(6, checksums(0x62db_1881))], 7),
             vec![Verdict::Accurate { confidence: 10 }]
         );
         assert_eq!(
-            compare(&entries, &[(6, checksums(0x1a8e_cbaf))]),
+            compare(&entries, &[(6, checksums(0x1a8e_cbaf))], 7),
             vec![Verdict::Different],
             "track one's checksum is not track six's"
         );
@@ -256,7 +280,7 @@ mod tests {
         ];
 
         assert_eq!(
-            compare(&entries, &[(1, checksums(7))]),
+            compare(&entries, &[(1, checksums(7))], 9),
             vec![Verdict::Accurate { confidence: 7 }]
         );
     }
@@ -267,8 +291,21 @@ mod tests {
 
         assert!(empty.is_empty());
         assert_eq!(
-            compare(&empty, &[(1, checksums(1))]),
+            compare(&empty, &[(1, checksums(1))], 9),
             vec![Verdict::Unknown]
+        );
+    }
+
+    // The last track's number cannot be reproduced yet, and reporting it as a
+    // mismatch would put a warning on every disc there is.
+    #[test]
+    fn the_last_track_is_left_unknown_rather_than_called_wrong() {
+        let entries = parse(ANSWER).unwrap();
+
+        assert_eq!(
+            compare(&entries, &[(7, checksums(0x2472_5bc0))], 7),
+            vec![Verdict::Unknown],
+            "even a checksum that would have matched"
         );
     }
 
@@ -282,7 +319,7 @@ mod tests {
         }];
 
         assert_eq!(
-            compare(&entries, &[(1, checksums(1)), (2, checksums(2))]),
+            compare(&entries, &[(1, checksums(1)), (2, checksums(2))], 9),
             vec![Verdict::Accurate { confidence: 5 }, Verdict::Unknown]
         );
     }
